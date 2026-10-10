@@ -13,6 +13,9 @@ namespace TempHumiditySystem.Services.Modbus
     {
         private IPollingService pollingService;
         private Dictionary<PollItem, SensorPoint> map = new();
+
+        /// <summary>传感器轮询周期(ms)。</summary>
+        public const int PollIntervalMs = 1000;
         public event Action<SensorPoint>? sensorValueUpdated;  //通知报警系统检查
 
         public SensorCollectService(IPollingService pollingService)
@@ -30,7 +33,7 @@ namespace TempHumiditySystem.Services.Modbus
                 funcCode = ModbusFrame.FuncReadHoldingRegs,
                 addr = s.RegisterAddress,
                 count = 1,
-                intervalMs = 1000,
+                intervalMs = PollIntervalMs,
             };
             pollingService.AddPollItem(item);
             map.Add(item, s);
@@ -52,6 +55,7 @@ namespace TempHumiditySystem.Services.Modbus
             var result = raw[0];
             sensorPoint.CurrentValue = sensorPoint.ToPhysical(result);
             sensorPoint.IsOnline = true;
+            sensorPoint.LastUpdateTick = Environment.TickCount64;
             sensorValueUpdated?.Invoke(sensorPoint);
         }
 

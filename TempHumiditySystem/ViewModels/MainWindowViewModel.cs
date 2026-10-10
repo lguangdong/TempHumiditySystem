@@ -1,4 +1,8 @@
+using System;
 using System.Collections.ObjectModel;
+using System.ComponentModel;
+using System.Linq;
+using System.Windows.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using TempHumiditySystem.Models.ModBus;
@@ -8,9 +12,10 @@ using TempHumiditySystem.Services.SerialAssistant;
 namespace TempHumiditySystem.ViewModels
 {
     /// <summary>
-    /// 主窗口 ViewModel：管理导航菜单 + 当前页面，持有全局引擎供各页面 VM 共享。
+    /// 主窗口 ViewModel：管理导航菜单 + 当前页面 + 顶部/底部汇总栏，
+    /// 并持有全局引擎供各页面 VM 共享。
     /// </summary>
-    public partial class MainWindowViewModel : ObservableObject
+    public partial class MainWindowViewModel : ObservableObject, IDisposable
     {
         // ===== 全局引擎（各页面 VM 从这里拿，共享同一套实例） =====
         public SystemConfig Config { get; }
@@ -28,6 +33,21 @@ namespace TempHumiditySystem.ViewModels
         /// <summary>当前显示的页面 ViewModel。</summary>
         [ObservableProperty]
         private object? _currentViewModel;
+
+        // ===== 顶部汇总条 =====
+        [ObservableProperty] private bool _isConnected;
+        [ObservableProperty] private string _connectionText = "未连接";
+        [ObservableProperty] private int _activeAlarmCount;
+
+        // ===== 底部汇总条 =====
+        [ObservableProperty] private string _portStatusText = "串口状态：未连接";
+        [ObservableProperty] private string _pollIntervalText = "轮询周期：1s";
+        [ObservableProperty] private int _onlineSensorCount;
+
+        public string Version { get; } = "v0.1 骨架";
+
+        private readonly CommViewModel _comm;
+        private readonly DispatcherTimer _summaryTimer;
 
         public MainWindowViewModel(
             SystemConfig config,
@@ -48,8 +68,43 @@ namespace TempHumiditySystem.ViewModels
             HistoryStore = historyStore;
             HistorySampler = historySampler;
 
+            // 先在构造函数里建好通信页 VM，汇总栏要订阅它的连接状态
+            _comm = new CommViewModel(Polling, HistorySampler);
             BuildNavItems();
+
+            // ===== 汇总栏接线 =====
+            _comm.PropertyChanged += OnCommPropertyChanged;
+            IsConnected = _comm.IsConnected;
+            SyncConnectionText();
+
+            // 报警数：跟随活跃报警集合的变化
+            Alarm.ActiveAlarms.CollectionChanged += OnActiveAlarmsChanged;
+            ActiveAlarmCount = Alarm.ActiveAlarms.Count;
+
+            // 轮询周期：从采集服务的常量读，避免和实际值脱节
+            PollIntervalText = $"轮询周期：{SensorCollectService.PollIntervalMs / 1000.0:0.#}s";
+
+            // 在线测点数：每 1s 用"数据新鲜度"重算，口径与监控页卡片一致
+            _summaryTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
+            _summaryTimer.Tick += (_, _) => OnlineSensorCount = Config.Sensors.Count(s => s.IsFresh());
+            _summaryTimer.Start();
         }
+
+        private void OnCommPropertyChanged(object? sender, PropertyChangedEventArgs e)
+        {
+            if (e.PropertyName != nameof(CommViewModel.IsConnected)) return;
+            IsConnected = _comm.IsConnected;
+            SyncConnectionText();
+        }
+
+        private void SyncConnectionText()
+        {
+            ConnectionText = IsConnected ? "已连接" : "未连接";
+            PortStatusText = IsConnected ? "串口状态：已连接" : "串口状态：未连接";
+        }
+
+        private void OnActiveAlarmsChanged(object? sender, System.Collections.Specialized.NotifyCollectionChangedEventArgs e)
+            => ActiveAlarmCount = Alarm.ActiveAlarms.Count;
 
         private void BuildNavItems()
         {
@@ -60,7 +115,7 @@ namespace TempHumiditySystem.ViewModels
             NavItems.Add(new NavItem { Title = "报警记录", PageViewModel = new AlarmViewModel(Alarm) });
             NavItems.Add(new NavItem { Title = "设备控制", PageViewModel = new ControlViewModel(Control, Config) });
             NavItems.Add(new NavItem { Title = "参数配置", PageViewModel = new ConfigViewModel() });
-            NavItems.Add(new NavItem { Title = "通信设置", PageViewModel = new CommViewModel(Polling, HistorySampler) });
+            NavItems.Add(new NavItem { Title = "通信设置", PageViewModel = _comm });
 
             CurrentViewModel = NavItems[0].PageViewModel;
         }
@@ -71,6 +126,13 @@ namespace TempHumiditySystem.ViewModels
         {
             if (item?.PageViewModel != null)
                 CurrentViewModel = item.PageViewModel;
+        }
+
+        public void Dispose()
+        {
+            _summaryTimer.Stop();
+            _comm.PropertyChanged -= OnCommPropertyChanged;
+            Alarm.ActiveAlarms.CollectionChanged -= OnActiveAlarmsChanged;
         }
     }
 }

@@ -1,11 +1,12 @@
 using System;
 using System.Collections.Generic;
+using System.IO.Ports;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using System.Text;
 using System.Threading.Tasks;
-using System.IO.Ports;
-using System.Runtime.CompilerServices;
 using TempHumiditySystem.Services.Interface;
+using TempHumiditySystem.Services.MeException;
 
 namespace TempHumiditySystem.Services.SerialAssistant
 {
@@ -76,8 +77,17 @@ namespace TempHumiditySystem.Services.SerialAssistant
         public int Send(byte[] data)
         {
             if(!IsOpen) return 0;
-            _port!.Write(data, 0, data.Length);
-            return data.Length;
+            try
+            {
+                _port!.Write(data, 0, data.Length);
+                return data.Length;
+            }
+            catch (TimeoutException e)
+            {
+
+                throw new SerialPortFailureException("串口write方法超时，从站可能未准备好", e);
+            }
+
         }
 
         public void Close()

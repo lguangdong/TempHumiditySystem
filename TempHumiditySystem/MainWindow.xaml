@@ -21,9 +21,22 @@
                            VerticalAlignment="Center"/>
                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Right"
                             VerticalAlignment="Center">
-                    <Ellipse Width="10" Height="10" Fill="#FFB74D" Margin="0,0,6,0"/>
-                    <TextBlock Text="未连接" Foreground="White" Margin="0,0,24,0"/>
-                    <TextBlock Text="报警数：0" Foreground="White"/>
+                    <Ellipse Width="10" Height="10" Margin="0,0,6,0">
+                        <Ellipse.Style>
+                            <Style TargetType="Ellipse">
+                                <Setter Property="Fill" Value="#FFB74D"/>
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding IsConnected}" Value="True">
+                                        <Setter Property="Fill" Value="#4CAF50"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Ellipse.Style>
+                    </Ellipse>
+                    <TextBlock Text="{Binding ConnectionText}" Foreground="White" Margin="0,0,24,0"/>
+                    <TextBlock Foreground="White">
+                        <Run Text="报警数："/><Run Text="{Binding ActiveAlarmCount, Mode=OneWay}"/>
+                    </TextBlock>
                 </StackPanel>
             </Grid>
         </Border>
@@ -88,10 +101,12 @@
         <Border Grid.Row="2" Background="#F5F6F8" BorderBrush="#E0E0E0"
                 BorderThickness="0,1,0,0" Padding="16,6">
             <StackPanel Orientation="Horizontal">
-                <TextBlock Text="串口状态：未连接" Foreground="#888"/>
-                <TextBlock Text="轮询周期：1s" Foreground="#888" Margin="32,0,0,0"/>
-                <TextBlock Text="在线测点数：0" Foreground="#888" Margin="32,0,0,0"/>
-                <TextBlock Text="v0.1 骨架" Foreground="#BBB" Margin="32,0,0,0"/>
+                <TextBlock Text="{Binding PortStatusText}" Foreground="#888"/>
+                <TextBlock Text="{Binding PollIntervalText}" Foreground="#888" Margin="32,0,0,0"/>
+                <TextBlock Foreground="#888" Margin="32,0,0,0">
+                    <Run Text="在线测点数："/><Run Text="{Binding OnlineSensorCount, Mode=OneWay}"/>
+                </TextBlock>
+                <TextBlock Text="{Binding Version}" Foreground="#BBB" Margin="32,0,0,0"/>
             </StackPanel>
         </Border>
     </Grid>

@@ -17,21 +17,74 @@
             </ItemsControl.ItemsPanel>
             <ItemsControl.ItemTemplate>
                 <DataTemplate>
-                    <Border Width="190" Margin="6" Padding="14"
-                            BorderBrush="#CCCCCC" BorderThickness="1" CornerRadius="8">
+                    <Border Width="190" Margin="6" Padding="14" BorderThickness="1" CornerRadius="8">
+                        <Border.Style>
+                            <Style TargetType="Border">
+                                <Setter Property="BorderBrush" Value="#CCCCCC"/>
+                                <Style.Triggers>
+                                    <!-- 离线：边框变浅、底色变灰 -->
+                                    <DataTrigger Binding="{Binding IsOnline}" Value="False">
+                                        <Setter Property="BorderBrush" Value="#E0E0E0"/>
+                                        <Setter Property="Background" Value="#FAFAFA"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Border.Style>
+
                         <StackPanel>
-                            <TextBlock Text="{Binding GroupName}" FontSize="15" FontWeight="Bold"/>
+                            <!-- 标题行：组名 + 从站在线状态灯 -->
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Grid.Column="0" Text="{Binding GroupName}"
+                                           FontSize="15" FontWeight="Bold" VerticalAlignment="Center"/>
+                                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                                    <Ellipse Width="8" Height="8" VerticalAlignment="Center">
+                                        <Ellipse.Style>
+                                            <Style TargetType="Ellipse">
+                                                <Setter Property="Fill" Value="#4CAF50"/>
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding IsOnline}" Value="False">
+                                                        <Setter Property="Fill" Value="#E53935"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </Ellipse.Style>
+                                    </Ellipse>
+                                    <TextBlock Text="{Binding OnlineText}" FontSize="12"
+                                               Margin="4,0,0,0" VerticalAlignment="Center">
+                                        <TextBlock.Style>
+                                            <Style TargetType="TextBlock">
+                                                <Setter Property="Foreground" Value="#4CAF50"/>
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding IsOnline}" Value="False">
+                                                        <Setter Property="Foreground" Value="#E53935"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </TextBlock.Style>
+                                    </TextBlock>
+                                </StackPanel>
+                            </Grid>
 
                             <TextBlock Text="温度" Foreground="Gray" Margin="0,10,0,0"/>
                             <StackPanel Orientation="Horizontal">
-                                <TextBlock Text="{Binding Temperature.CurrentValue, StringFormat={}{0:F1}}"
-                                           FontSize="28" FontWeight="Bold">
+                                <TextBlock FontSize="28" FontWeight="Bold">
                                     <TextBlock.Style>
                                         <Style TargetType="TextBlock">
+                                            <Setter Property="Text"
+                                                    Value="{Binding Temperature.CurrentValue, StringFormat={}{0:F1}}"/>
                                             <Setter Property="Foreground" Value="#333333"/>
                                             <Style.Triggers>
                                                 <DataTrigger Binding="{Binding Temperature.IsAlarming}" Value="True">
                                                     <Setter Property="Foreground" Value="Red"/>
+                                                </DataTrigger>
+                                                <!-- 该测点离线：置灰并显示占位符，避免展示陈旧数值 -->
+                                                <DataTrigger Binding="{Binding TemperatureOnline}" Value="False">
+                                                    <Setter Property="Text" Value="--"/>
+                                                    <Setter Property="Foreground" Value="#BDBDBD"/>
                                                 </DataTrigger>
                                             </Style.Triggers>
                                         </Style>
@@ -42,14 +95,19 @@
 
                             <TextBlock Text="湿度" Foreground="Gray" Margin="0,10,0,0"/>
                             <StackPanel Orientation="Horizontal">
-                                <TextBlock Text="{Binding Humidity.CurrentValue, StringFormat={}{0:F1}}"
-                                           FontSize="28" FontWeight="Bold">
+                                <TextBlock FontSize="28" FontWeight="Bold">
                                     <TextBlock.Style>
                                         <Style TargetType="TextBlock">
+                                            <Setter Property="Text"
+                                                    Value="{Binding Humidity.CurrentValue, StringFormat={}{0:F1}}"/>
                                             <Setter Property="Foreground" Value="#333333"/>
                                             <Style.Triggers>
                                                 <DataTrigger Binding="{Binding Humidity.IsAlarming}" Value="True">
                                                     <Setter Property="Foreground" Value="Red"/>
+                                                </DataTrigger>
+                                                <DataTrigger Binding="{Binding HumidityOnline}" Value="False">
+                                                    <Setter Property="Text" Value="--"/>
+                                                    <Setter Property="Foreground" Value="#BDBDBD"/>
                                                 </DataTrigger>
                                             </Style.Triggers>
                                         </Style>

@@ -4,6 +4,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using TempHumiditySystem.Services.Interface;
+using TempHumiditySystem.Services.MeException;
 using TempHumiditySystem.Services.SerialAssistant;
 
 namespace TempHumiditySystem.Services.Modbus
@@ -106,10 +107,16 @@ namespace TempHumiditySystem.Services.Modbus
                 }
                 if (!Crc16.Validate(frame)) throw new InvalidOperationException("响应的crc校验失败");
                 return frame;
-            } finally
+            }
+            catch(Exception e)
+            {
+                throw;
+            }
+            finally
             {
                 _questGate.Release();
             }
+
         }
 
         public void Dispose()

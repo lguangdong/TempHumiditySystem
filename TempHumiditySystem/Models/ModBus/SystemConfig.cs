@@ -34,21 +34,21 @@ namespace TempHumiditySystem.Models.ModBus
         /// <summary>加载配置；文件不存在或损坏时，用示例配置生成并落盘。</summary>
         public static SystemConfig LoadOrCreate(string? path = null)
         {
-            path ??= DefaultPath;
-            try
-            {
-                if (File.Exists(path))
-                {
-                    var json = File.ReadAllText(path, Encoding.UTF8);
-                    var cfg = JsonSerializer.Deserialize<SystemConfig>(json, Options);
-                    if (cfg != null)
-                        return cfg;
-                }
-            }
-            catch
-            {
-                // 配置损坏时回退到示例配置
-            }
+            //path ??= DefaultPath;
+            //try
+            //{
+            //    if (File.Exists(path))
+            //    {
+            //        var json = File.ReadAllText(path, Encoding.UTF8);
+            //        var cfg = JsonSerializer.Deserialize<SystemConfig>(json, Options);
+            //        if (cfg != null)
+            //            return cfg;
+            //    }
+            //}
+            //catch
+            //{
+            //    // 配置损坏时回退到示例配置
+            //}
 
             var sample = CreateSample();
             sample.Save(path);
@@ -74,10 +74,10 @@ namespace TempHumiditySystem.Models.ModBus
 
             AddSensor(cfg, "1#仓库温度", "1#仓库", 1, 0x0000, ModbusDataType.Int16,  0.1, "℃",   SensorCategory.Temperature, 30, 0);
             AddSensor(cfg, "1#仓库湿度", "1#仓库", 1, 0x0001, ModbusDataType.UInt16, 0.1, "%RH", SensorCategory.Humidity,    70, 30);
-            AddSensor(cfg, "2#仓库温度", "2#仓库", 2, 0x0000, ModbusDataType.Int16,  0.1, "℃",   SensorCategory.Temperature, 30, 0);
-            AddSensor(cfg, "2#仓库湿度", "2#仓库", 2, 0x0001, ModbusDataType.UInt16, 0.1, "%RH", SensorCategory.Humidity,    70, 30);
-            AddSensor(cfg, "3#车间温度", "3#车间", 3, 0x0000, ModbusDataType.Int16,  0.1, "℃",   SensorCategory.Temperature, 35, 5);
-            AddSensor(cfg, "3#车间湿度", "3#车间", 3, 0x0001, ModbusDataType.UInt16, 0.1, "%RH", SensorCategory.Humidity,    75, 35);
+            //AddSensor(cfg, "2#仓库温度", "2#仓库", 2, 0x0000, ModbusDataType.Int16,  0.1, "℃",   SensorCategory.Temperature, 30, 0);
+            //AddSensor(cfg, "2#仓库湿度", "2#仓库", 2, 0x0001, ModbusDataType.UInt16, 0.1, "%RH", SensorCategory.Humidity,    70, 30);
+            //AddSensor(cfg, "3#车间温度", "3#车间", 3, 0x0000, ModbusDataType.Int16,  0.1, "℃",   SensorCategory.Temperature, 35, 5);
+            //AddSensor(cfg, "3#车间湿度", "3#车间", 3, 0x0001, ModbusDataType.UInt16, 0.1, "%RH", SensorCategory.Humidity,    75, 35);
 
             AddDevice(cfg, "加热器1",  DeviceType.Heater,       1, 0x0100, "1#仓库温度", 18, 25, turnsOnBelow: true);
             AddDevice(cfg, "加湿器1",  DeviceType.Humidifier,   1, 0x0101, "1#仓库湿度", 35, 55, turnsOnBelow: true);

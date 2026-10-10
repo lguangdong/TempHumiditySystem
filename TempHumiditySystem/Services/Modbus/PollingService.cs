@@ -4,6 +4,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using TempHumiditySystem.Services.Interface;
+using TempHumiditySystem.Services.MeException;
 using TempHumiditySystem.Services.SerialAssistant;
 
 namespace TempHumiditySystem.Services.Modbus
@@ -109,6 +110,7 @@ namespace TempHumiditySystem.Services.Modbus
                     }
                     catch (TimeoutException ex) { pollFailed?.Invoke(item, ex.Message); OnFail(ct); }
                     catch (ModbusException ex) { pollFailed?.Invoke(item, ex.Message); OnFail(ct); }
+                    catch (SerialPortFailureException ex) { pollFailed?.Invoke(item, ex.Message); }  //不需要重连
                     catch (Exception ex)
                     {
                         pollFailed?.Invoke(item, ex.Message);

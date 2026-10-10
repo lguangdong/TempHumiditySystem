@@ -3,10 +3,11 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using System;
 
-namespace TempHumiditySystem.Services.Modbus
+namespace TempHumiditySystem.Services.MeException
 {
-    public sealed class ModbusException:Exception
+    public sealed class ModbusException : Exception
     {
         private static string Describe(byte code) => code switch
         {

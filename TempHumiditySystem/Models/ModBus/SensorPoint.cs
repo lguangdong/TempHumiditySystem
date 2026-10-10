@@ -1,3 +1,4 @@
+using System;
 using CommunityToolkit.Mvvm.ComponentModel;
 using System.Text.Json.Serialization;
 
@@ -49,6 +50,17 @@ namespace TempHumiditySystem.Models.ModBus
         [ObservableProperty]
         [property: JsonIgnore]
         public bool _isAlarming;  // 是否正在触发报警
+
+        /// <summary>最近一次成功读取的时刻（Environment.TickCount64），用于判断数据是否"新鲜"。</summary>
+        [JsonIgnore]
+        public long LastUpdateTick { get; set; }
+
+        /// <summary>默认数据新鲜度阈值(ms)：超过该时长没收到成功读取就视为离线。取轮询周期(1000ms)的 3 倍容差。</summary>
+        public const long StaleMs = 3000;
+
+        /// <summary>数据是否新鲜：最近一次读取成功且未超过 staleMs（供监控页卡片与汇总栏共用，保证口径一致）。</summary>
+        public bool IsFresh(long staleMs = StaleMs)
+            => IsOnline && Environment.TickCount64 - LastUpdateTick <= staleMs;
 
         /// <summary>原始值 → 物理值（乘系数）。</summary>
         public double ToPhysical(ushort raw)
