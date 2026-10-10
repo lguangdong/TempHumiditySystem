@@ -1,0 +1,18 @@
+<UserControl x:Class="TempHumiditySystem.Views.HistoryView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <StackPanel Margin="16">
+        <TextBlock Text="历史数据" FontSize="18" FontWeight="Bold" Margin="0,0,0,20"/>
+
+        <StackPanel Orientation="Horizontal">
+            <TextBlock Text="已采样数据条数：" VerticalAlignment="Center"/>
+            <TextBlock Text="{Binding SampleCount}" FontWeight="Bold" FontSize="16" VerticalAlignment="Center"/>
+        </StackPanel>
+
+        <TextBlock Text="历史数据保留最近 24 小时（5 秒采样）。"
+                   Foreground="Gray" Margin="0,8,0,20"/>
+
+        <Button Content="导出 CSV" Width="120" HorizontalAlignment="Left"
+                Command="{Binding ExportCommand}"/>
+    </StackPanel>
+</UserControl>
