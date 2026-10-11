@@ -22,8 +22,17 @@ namespace TempHumiditySystem.Services.Modbus
 
         public bool isRunning => loopThread != null;
 
+        /// <summary>串口当前是否真实处于打开状态（供上层展示真实链路状态）。</summary>
+        public bool IsPortOpen => portService.IsOpen;
+
         public event Action<PollItem, object>? valueUpdated;
         public event Action<PollItem, string>? pollFailed;
+
+        /// <summary>链路丢失（自动重连失败）时触发，参数为原因。</summary>
+        public event Action<string>? connectionLost;
+
+        /// <summary>链路恢复（自动重连成功）时触发。</summary>
+        public event Action? connectionRestored;
 
         //重连
         int reconnectMaxFailCount = 3;
@@ -56,7 +65,10 @@ namespace TempHumiditySystem.Services.Modbus
         {
             if (isRunning) return;
             serialSetting = setting;
+            // 打开失败会抛 SerialPortFailureException，Start 直接中断，不会启动轮询线程
             portService.Open(setting);
+            if (!portService.IsOpen)
+                throw new SerialPortFailureException($"串口 {setting.PortName} 未能打开");
 
             loopCTS = new CancellationTokenSource();
             loopThread = new Thread(() =>
@@ -138,8 +150,12 @@ namespace TempHumiditySystem.Services.Modbus
                     // 用可被 Cancel 唤醒的等待，Stop() 时不必死等满 reconnectDelayMs
                     if (ct.WaitHandle.WaitOne(reconnectDelayMs)) return;
                     portService.Open(serialSetting);
-                } catch(Exception ex) { 
-                    //重连失败，等下一次重连
+                    connectionRestored?.Invoke();   // 重连成功，通知上层恢复"已连接"
+                }
+                catch (Exception ex)
+                {
+                    // 重连失败，等下一次重连；通知上层链路已丢失
+                    connectionLost?.Invoke($"自动重连失败：{ex.Message}");
                 }
                 failCount = 0;
             }

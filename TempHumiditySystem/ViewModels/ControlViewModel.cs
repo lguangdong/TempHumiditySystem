@@ -31,5 +31,9 @@ namespace TempHumiditySystem.ViewModels
         /// <summary>切回自动（纯内存操作，UI 线程安全）。</summary>
         [RelayCommand]
         private void SetAuto(Device device) => _control.SetAuto(device);
+
+        /// <summary>切到手动（纯内存操作，不会写寄存器；之后可点"开/关"手动控制）。</summary>
+        [RelayCommand]
+        private void SetManualMode(Device device) => _control.SetManualMode(device);
     }
 }

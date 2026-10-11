@@ -37,9 +37,11 @@ namespace TempHumiditySystem.Services.SerialAssistant
             }
             catch (Exception ex)
             {
-
+                // 打开失败必须让调用方感知，否则上层会误判为"已连接"（假在线）
                 ErrorOccurred?.Invoke(ex.Message);
-                return;
+                _port?.Dispose();
+                _port = null;
+                throw new SerialPortFailureException($"串口 {s.PortName} 打开失败：{ex.Message}", ex);
             }
        
 

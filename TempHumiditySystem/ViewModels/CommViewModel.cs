@@ -38,6 +38,23 @@ namespace TempHumiditySystem.ViewModels
         {
             _polling = polling;
             _historySampler = historySampler;
+
+            // 真实链路状态：自动重连失败/成功时同步到 UI，而不是只看命令是否执行成功
+            _polling.connectionLost += OnConnectionLost;
+            _polling.connectionRestored += OnConnectionRestored;
+        }
+
+        private void OnConnectionLost(string reason)
+        {
+            // 可能由轮询后台线程触发；标量属性赋值，WPF 会自动 marshal 到 UI 线程
+            IsConnected = false;
+            StatusText = $"连接已断开：{reason}";
+        }
+
+        private void OnConnectionRestored()
+        {
+            IsConnected = true;
+            StatusText = $"已重新连接 {PortName}";
         }
 
         [RelayCommand(CanExecute = nameof(CanConnect))]
@@ -55,7 +72,6 @@ namespace TempHumiditySystem.ViewModels
                     // 先停历史采样，再停轮询（顺序不能反）
                     await Task.Run(() =>
                     {
-                        Thread.Sleep(2000);
                         _historySampler.Stop();
                         _polling.Stop();
                     });

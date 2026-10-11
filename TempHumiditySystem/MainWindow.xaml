@@ -55,13 +55,51 @@
                     <ItemsControl.ItemTemplate>
                         <DataTemplate>
                             <Button Content="{Binding Title}"
-                                    Margin="12,4" Padding="14,10"
+                                    Margin="8,2" Padding="14,10"
                                     HorizontalContentAlignment="Left"
-                                    Background="Transparent" BorderThickness="0"
+                                    BorderThickness="3,0,0,0"
+                                    Cursor="Hand"
                                     FontSize="14"
                                     Command="{Binding DataContext.NavigateCommand,
                                               RelativeSource={RelativeSource AncestorType=Window}}"
-                                    CommandParameter="{Binding}"/>
+                                    CommandParameter="{Binding}">
+                                <Button.Style>
+                                    <Style TargetType="Button">
+                                        <Setter Property="Background" Value="Transparent"/>
+                                        <Setter Property="Foreground" Value="#444444"/>
+                                        <Setter Property="BorderBrush" Value="Transparent"/>
+                                        <!-- 自定义模板：去掉系统按钮的悬停/按下 Chrome，让高亮完全由下面触发器控制 -->
+                                        <Setter Property="Template">
+                                            <Setter.Value>
+                                                <ControlTemplate TargetType="Button">
+                                                    <Border x:Name="Bd"
+                                                            Background="{TemplateBinding Background}"
+                                                            BorderBrush="{TemplateBinding BorderBrush}"
+                                                            BorderThickness="{TemplateBinding BorderThickness}">
+                                                        <ContentPresenter
+                                                            HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                                            VerticalAlignment="Center"
+                                                            Margin="{TemplateBinding Padding}"/>
+                                                    </Border>
+                                                </ControlTemplate>
+                                            </Setter.Value>
+                                        </Setter>
+                                        <Style.Triggers>
+                                            <!-- 悬停反馈（声明在选中触发器之前：两者同时命中时，后声明的选中态优先） -->
+                                            <Trigger Property="IsMouseOver" Value="True">
+                                                <Setter Property="Background" Value="#EDF1F5"/>
+                                            </Trigger>
+                                            <!-- 选中态：左侧蓝色竖条 + 浅蓝底 + 蓝字加粗 -->
+                                            <DataTrigger Binding="{Binding IsSelected}" Value="True">
+                                                <Setter Property="Background" Value="#E3F0FB"/>
+                                                <Setter Property="Foreground" Value="#2C6FBB"/>
+                                                <Setter Property="FontWeight" Value="SemiBold"/>
+                                                <Setter Property="BorderBrush" Value="#2C6FBB"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Button.Style>
+                            </Button>
                         </DataTemplate>
                     </ItemsControl.ItemTemplate>
                 </ItemsControl>
@@ -101,7 +139,7 @@
         <Border Grid.Row="2" Background="#F5F6F8" BorderBrush="#E0E0E0"
                 BorderThickness="0,1,0,0" Padding="16,6">
             <StackPanel Orientation="Horizontal">
-                <TextBlock Text="{Binding PortStatusText}" Foreground="#888"/>
+                <TextBlock Text="{Binding SerialConfigText}" Foreground="#888"/>
                 <TextBlock Text="{Binding PollIntervalText}" Foreground="#888" Margin="32,0,0,0"/>
                 <TextBlock Foreground="#888" Margin="32,0,0,0">
                     <Run Text="在线测点数："/><Run Text="{Binding OnlineSensorCount, Mode=OneWay}"/>

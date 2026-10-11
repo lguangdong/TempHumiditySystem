@@ -35,6 +35,12 @@ namespace TempHumiditySystem.Services.Modbus
             d.Mode = ControlMode.Auto;
         }
 
+        //设置为手动模式（仅切模式，不改动设备开关状态）
+        public void SetManualMode(Device d)
+        {
+            d.Mode = ControlMode.Manual;
+        }
+
         public void AddDevices(IEnumerable<Device> devices)
         {
             _devices.AddRange(devices);

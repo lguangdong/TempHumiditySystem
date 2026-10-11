@@ -17,5 +17,7 @@ namespace TempHumiditySystem.Services.Interface
 
         public event Action<PollItem, object> valueUpdated;
         public event Action<PollItem, string> pollFailed;
+        public event Action<string> connectionLost;
+        public event Action? connectionRestored;
     }
 }

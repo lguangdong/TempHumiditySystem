@@ -72,17 +72,17 @@ namespace TempHumiditySystem.Models.ModBus
         {
             var cfg = new SystemConfig();
 
-            AddSensor(cfg, "1#仓库温度", "1#仓库", 1, 0x0000, ModbusDataType.Int16,  0.1, "℃",   SensorCategory.Temperature, 30, 0);
-            AddSensor(cfg, "1#仓库湿度", "1#仓库", 1, 0x0001, ModbusDataType.UInt16, 0.1, "%RH", SensorCategory.Humidity,    70, 30);
+            AddSensor(cfg, "1#仓库温度", "1#仓库", 1, 0x0000, ModbusDataType.Int16,  0.1, "℃",   SensorCategory.Temperature, 35, 25);
+            AddSensor(cfg, "1#仓库湿度", "1#仓库", 1, 0x0001, ModbusDataType.UInt16, 0.1, "%RH", SensorCategory.Humidity,    70, 50);
             //AddSensor(cfg, "2#仓库温度", "2#仓库", 2, 0x0000, ModbusDataType.Int16,  0.1, "℃",   SensorCategory.Temperature, 30, 0);
             //AddSensor(cfg, "2#仓库湿度", "2#仓库", 2, 0x0001, ModbusDataType.UInt16, 0.1, "%RH", SensorCategory.Humidity,    70, 30);
             //AddSensor(cfg, "3#车间温度", "3#车间", 3, 0x0000, ModbusDataType.Int16,  0.1, "℃",   SensorCategory.Temperature, 35, 5);
             //AddSensor(cfg, "3#车间湿度", "3#车间", 3, 0x0001, ModbusDataType.UInt16, 0.1, "%RH", SensorCategory.Humidity,    75, 35);
 
-            AddDevice(cfg, "加热器1",  DeviceType.Heater,       1, 0x0100, "1#仓库温度", 18, 25, turnsOnBelow: true);
+            AddDevice(cfg, "加热器1",  DeviceType.Heater,       1, 0x0100, "1#仓库温度", 25, 35, turnsOnBelow: true);
             AddDevice(cfg, "加湿器1",  DeviceType.Humidifier,   1, 0x0101, "1#仓库湿度", 35, 55, turnsOnBelow: true);
             AddDevice(cfg, "除湿机1",  DeviceType.Dehumidifier, 1, 0x0102, "1#仓库湿度", 65, 50, turnsOnBelow: false);
-            AddDevice(cfg, "风机1",    DeviceType.Fan,         1, 0x0103, "1#仓库温度", 28, 26, turnsOnBelow: false);
+            AddDevice(cfg, "风机1",    DeviceType.Fan,         1, 0x0103, "1#仓库温度", 35, 25, turnsOnBelow: false);
 
             return cfg;
         }

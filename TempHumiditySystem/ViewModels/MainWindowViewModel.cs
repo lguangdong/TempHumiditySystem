@@ -40,7 +40,7 @@ namespace TempHumiditySystem.ViewModels
         [ObservableProperty] private int _activeAlarmCount;
 
         // ===== 底部汇总条 =====
-        [ObservableProperty] private string _portStatusText = "串口状态：未连接";
+        [ObservableProperty] private string _serialConfigText = "串口：COM3 @9600";
         [ObservableProperty] private string _pollIntervalText = "轮询周期：1s";
         [ObservableProperty] private int _onlineSensorCount;
 
@@ -76,6 +76,7 @@ namespace TempHumiditySystem.ViewModels
             _comm.PropertyChanged += OnCommPropertyChanged;
             IsConnected = _comm.IsConnected;
             SyncConnectionText();
+            SyncSerialConfigText();
 
             // 报警数：跟随活跃报警集合的变化
             Alarm.ActiveAlarms.CollectionChanged += OnActiveAlarmsChanged;
@@ -92,15 +93,28 @@ namespace TempHumiditySystem.ViewModels
 
         private void OnCommPropertyChanged(object? sender, PropertyChangedEventArgs e)
         {
-            if (e.PropertyName != nameof(CommViewModel.IsConnected)) return;
-            IsConnected = _comm.IsConnected;
-            SyncConnectionText();
+            switch (e.PropertyName)
+            {
+                case nameof(CommViewModel.IsConnected):
+                    IsConnected = _comm.IsConnected;
+                    SyncConnectionText();
+                    break;
+                case nameof(CommViewModel.PortName):
+                case nameof(CommViewModel.BaudRate):
+                    SyncSerialConfigText();
+                    break;
+            }
         }
 
         private void SyncConnectionText()
         {
             ConnectionText = IsConnected ? "已连接" : "未连接";
-            PortStatusText = IsConnected ? "串口状态：已连接" : "串口状态：未连接";
+        }
+
+        /// <summary>底栏展示串口参数，与顶栏的连接状态互补，不再重复表达同一状态。</summary>
+        private void SyncSerialConfigText()
+        {
+            SerialConfigText = $"串口：{_comm.PortName} @{_comm.BaudRate}";
         }
 
         private void OnActiveAlarmsChanged(object? sender, System.Collections.Specialized.NotifyCollectionChangedEventArgs e)
@@ -118,13 +132,17 @@ namespace TempHumiditySystem.ViewModels
             NavItems.Add(new NavItem { Title = "通信设置", PageViewModel = _comm });
 
             CurrentViewModel = NavItems[0].PageViewModel;
+            NavItems[0].IsSelected = true;   // 初始选中第一项，菜单高亮与内容区一致
         }
 
-        /// <summary>切换页面：把选中项的 PageViewModel 赋给 CurrentViewModel。</summary>
+        /// <summary>切换页面：把选中项的 PageViewModel 赋给 CurrentViewModel，并维护菜单选中态。</summary>
         [RelayCommand]
         private void Navigate(NavItem item)
         {
-            if (item?.PageViewModel != null)
+            if (item == null) return;
+            foreach (var nav in NavItems)
+                nav.IsSelected = ReferenceEquals(nav, item);
+            if (item.PageViewModel != null)
                 CurrentViewModel = item.PageViewModel;
         }
 
