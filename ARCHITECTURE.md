@@ -53,7 +53,7 @@
 
 | 类 | 职责 | 关键设计 |
 |----|------|----------|
-| `SensorPoint` | 一个测点 | 静态配置（Name/SlaveId/寄存器地址/量程/阈值…）+ 运行时状态（CurrentValue/IsOnline/IsAlarming）分离 |
+| `SensorPoint` | 一个测点 | 静态配置（Name/SlaveId/寄存器地址/量程/阈值…）+ 运行时状态（CurrentValue/IsOnline/IsAlarming/LastUpdateTick）分离；`IsFresh()` 判定数据新鲜度 |
 | `Device` | 一个控制设备 | 通过写单寄存器（功能码 06）控制开关；自动控制参数（关联测点、OnAt/OffAt、TurnsOnBelow） |
 | `Alarm` | 一条报警记录 | 类型（超上限/超下限/通信故障）、级别、状态（活跃/已确认） |
 | `SystemConfig` | 系统配置 | `Sensors` + `Devices`，负责 JSON 读写 |
@@ -62,7 +62,8 @@
 
 - **运行时状态字段** 用 `[ObservableProperty]` + `[property: JsonIgnore]`，既支持 WPF 双向绑定，又不会污染配置文件。
 - **`SensorPoint.ToPhysical(ushort raw)`**：原始值 → 物理值（按 DataType 处理符号位，再乘 Scale）。
-- **配置编辑使用深拷贝**：`SensorPoint.Clone()` / `Device.Clone()` 只拷贝静态配置，供配置编辑页使用（见 §7）。
+- **在线（新鲜度）判定**：`IsOnline` 仅表示"最近一次读取成功"；真正的"在线"用 `IsFresh()`（`IsOnline && TickCount64 - LastUpdateTick <= StaleMs`，`StaleMs` 默认 3000ms）。监控卡片与底栏在线数统一用此口径，避免串口断开后收不到事件却仍显示在线。
+- **`Clone()` 目前未被调用**：`SensorPoint.Clone()` / `Device.Clone()` 仍保留，但配置页已改为独立编辑集合，不再克隆运行对象（见 §9）。
 
 ## 4. 串口层与 Modbus 协议层
 
@@ -70,12 +71,13 @@
 
 - 实现 `ISerialPortService`，封装 `System.IO.Ports.SerialPort`。
 - `Open()` 启动独立后台读线程 `ReadLoop`，持续 `Read` 并把数据通过 `DataReceived` 事件抛出。
-- `ReadTimeout = 200ms`，正常超时忽略，异常则触发 `ErrorOccurred` 并退出读线程。
+- `ReadTimeout = 200ms`（另设 `WriteTimeout = 2000ms`、`ReadBufferSize = 8192`），正常超时忽略，异常则触发 `ErrorOccurred` 并退出读线程。
+- `Open()` 失败时触发 `ErrorOccurred` 并抛出 `SerialPortFailureException`（避免上层误判为"已连接"）；`Send()` 写超时同样抛 `SerialPortFailureException`。
 - 接口抽象 `ISerialPortService` 便于后续替换/测试。
 
 ### 4.2 ModbusRTUClient（Modbus 客户端）
 
-- 依赖 `SerialPortService`，通过 `DataReceived` 事件把数据推入内部缓冲区 `_rBuffer`。
+- 依赖 `ISerialPortService`，通过 `DataReceived` 事件把数据推入内部缓冲区 `_rBuffer`。
 - **收发事务 `TransactCore`**：
   - 用 `SemaphoreSlim _questGate`（容量 1）串行化请求，保证同一时刻只有一个请求在途。
   - 发送前清空接收缓冲 + 重置 `AutoResetEvent`，发送后按超时 `timeoutMs` 等待。
@@ -106,16 +108,17 @@ sensorValueUpdated(SensorPoint)  ──► AlarmEngine / ControlEngine
 ### 5.1 PollingService
 
 - 实现 `IPollingService`，维护 `List<PollItem>`（加锁保护）。
-- `Start(SerialSetting)`：打开串口，启动后台线程 `PollLoop`。
+- `Start(SerialSetting)`：打开串口（失败抛 `SerialPortFailureException` 并中断，不启动轮询线程），启动后台线程 `PollLoop`；`IsPortOpen` 暴露真实链路状态。
 - 轮询循环：快照 `pollItems` → 逐个检查 `nextPollTick` 决定是否到点 → 读取 → 触发 `valueUpdated` / `pollFailed`。
-- **自动重连**：连续失败 `reconnectMaxFailCount`（3）次后，关闭串口、等待 `reconnectDelayMs`（5s）后重开。
+- **自动重连**：`TimeoutException` / `ModbusException` / 其它异常累计失败 `reconnectMaxFailCount`（3）次后，关闭串口、等待 `reconnectDelayMs`（5s，可被 `Stop()` 的 Cancel 提前唤醒）后重开。
+- **链路事件**：重连成功触发 `connectionRestored`，重连失败触发 `connectionLost(reason)`（通信页据此把"已连接"改回断开，避免假在线）；`SerialPortFailureException` 视为串口硬故障，不触发重连。
 - `PollItem` 含 `slaveId`、`funcCode`、`addr`、`count`、`intervalMs`、`nextPollTick`。
 
 ### 5.2 SensorCollectService（适配器模式）
 
 - 把底层的 `PollItem` 映射到领域对象 `SensorPoint`。
 - `AddSensor`：创建 `PollItem`（读保持寄存器、count=1、interval=1s）并建立 `map` 映射。
-- 收到 `valueUpdated`：取 `ushort[]` 第一个值 → `sensorPoint.CurrentValue = ToPhysical(raw)` → `IsOnline = true` → 触发 `sensorValueUpdated`。
+- 收到 `valueUpdated`：取 `ushort[]` 第一个值 → `sensorPoint.CurrentValue = ToPhysical(raw)` → `IsOnline = true` → 刷新 `LastUpdateTick = Environment.TickCount64` → 触发 `sensorValueUpdated`。
 - 收到 `pollFailed`：`IsOnline = false`。
 
 ## 6. 业务引擎
@@ -125,16 +128,19 @@ sensorValueUpdated(SensorPoint)  ──► AlarmEngine / ControlEngine
 - 维护 `Dictionary<SensorPoint, bool>` 记录每个测点的报警状态，做**边沿检测**：
   - 从正常 → 越限：创建 `Alarm` 加入 `ActiveAlarms`，触发 `alarmNotify`。
   - 从越限 → 正常：从 `ActiveAlarms` 移到 `HistoryAlarms`，触发 `alarmCleared`。
-- `IsOutOfRange`：`!IsOnline` 直接返回 false（离线不报越限）；否则比较上下限。
+- `IsOutOfRange`：`!IsOnline` 直接返回 false（离线不报越限）；否则比较上下限（`CurrentValue > HighLimit || CurrentValue < LowLimit`）。
+- 创建报警：按超上限/超下限判定类型，级别固定 `Warning`；恢复时用 `Source == sensor.Name` 在活跃列表定位并移到历史列表。
+- `Acknowledge(alarm)` / `AcknowledgeAll()`：把活跃报警状态置为 `Acknowledged`（不移动集合）。
 - 集合用 `ObservableCollection`，报警操作需在 UI 线程执行（组合根已用 `Dispatcher.InvokeAsync` 处理）。
 
 ### 6.2 ControlEngine（控制）
 
 - 持有 `List<Device>`，通过 `ModbusRTUClient.WriteSingleReg` 写寄存器控制开关。
-- **手动**：`SetManual(device, on)` 设 Mode=Manual 并立即写命令。
+- **模式切换**：`SetAuto(device)` 切回自动；`SetManualMode(device)` 仅切手动（不写寄存器）；`SetManual(device, on)` 切手动并立即写命令。
 - **自动**：`Check(sensor)` 遍历 Mode=Auto 且 `LinkedSensorName` 匹配的设备，按迟滞逻辑 `Evaluate`：
   - 用 `TurnsOnBelow` 区分升温类（低于阈值开）和降温类（高于阈值开）。
   - 运行中判断是否到 `OffAt`，停止中判断是否到 `OnAt`，避免频繁抖动。
+- 写寄存器为阻塞 IO，控制页把命令丢到后台线程执行。
 
 ## 7. 历史数据
 
@@ -164,21 +170,27 @@ sensorValueUpdated(SensorPoint)  ──► AlarmEngine / ControlEngine
 | PollingService.pollLoop | 轮询读取 | 报警切回 UI 线程（Dispatcher）；控制留后台线程 |
 | SerialPortService.ReadLoop | 串口读取 | 数据推入缓冲，由轮询线程消费 |
 | historySampler | 定时采样 | `ObservablePoint`/标量属性由 WPF 自动跨线程；LiveCharts2 支持后台更新集合 |
+| MainWindowViewModel.summaryTimer | 每 1s 统计在线测点数 | `DispatcherTimer`，天然运行在 UI 线程 |
+| MonitorViewModel.freshnessTimer | 每 500ms 刷新卡片在线态 | `DispatcherTimer`，天然运行在 UI 线程 |
 
 ## 9. 配置编辑的设计决策
 
-参数配置页（`ConfigViewModel`）编辑的是**深拷贝副本**，`Save()` 只把副本快照落盘，绝不修改运行中的全局 `config`。语义为「保存 = 落盘，重启后生效」。
+参数配置页（`ConfigViewModel`）持有**自己的编辑集合** `ObservableCollection<SensorPoint>` / `ObservableCollection<Device>`（构造时不注入运行中的 `config`，初始为空，可点「重新加载」从文件载入）。`Save()` 把这些集合装进一个**新的 `SystemConfig` 快照**落盘，`Reload()` 用 `SystemConfig.LoadOrCreate()` 刷新编辑集合——两条路径都**绝不修改运行中的全局 `config`**。语义为「保存 = 落盘，重启后生效」。
 
-**原因**：
+**原因**（为什么不直接改运行中的 `config.Sensors`）：
 1. 直接 `Clear() + AddRange()` 会导致新对象孤立（没有引擎采集/报警/控制），删除的对象仍被引擎引用。
 2. `HistorySampler` 后台线程并发遍历同一个 `List`，原地修改有线程安全问题。
-3. 浅拷贝编辑字段会直接污染正在运行的对象。
+3. 直接编辑运行对象会污染正在运行的状态。
 
 因此配置的正确生效方式是：编辑 → 保存 → 重启，由组合根按新 `config.json` 重新接线。
 
+> 历史实现曾用 `SensorPoint.Clone()` / `Device.Clone()` 克隆运行对象来编辑；现改为独立编辑集合后 `Clone()` 已无调用方。
+
 ## 10. 可扩展点与注意事项
 
-- **接口抽象**：`IPollingService` / `ISerialPortService` 已抽象，可替换为模拟实现用于单元测试。
+- **接口抽象**：`IPollingService` / `ISerialPortService` 已抽象（含 `connectionLost` / `connectionRestored` 事件），可替换为模拟实现用于单元测试。
+- **自定义异常**：位于 `Services/MeException/`——`ModbusException`（协议异常，携带功能码与异常码）、`SerialPortFailureException`（串口打开 / 写超时）。
 - **HexUtil / LogWriter** 位于 `SerialAssistant`，是通用工具类，当前未被主流程接线，属于预留能力。
-- **未接线项**：`App.OnStartup` 中的示例「顶栏/底栏」状态文本（未连接、报警数 0 等）目前是静态占位，尚未绑定运行时状态，后续可补。
+- **顶栏 / 底栏已接线**：`MainWindowViewModel` 已把连接状态、活跃报警数、串口参数、轮询周期、在线测点数绑定到运行状态（含 1s 刷新定时器）。
 - **串口枚举**：`SerialPortUtil.GetPorts()` 优先用 WMI 获取带描述的串口，失败时回退到 `SerialPort.GetPortNames()`。
+- **已知临时改动（调试用）**：`SystemConfig.LoadOrCreate()` 中"读取已有配置文件"的分支被临时注释，每次启动都会 `CreateSample()` 覆盖 `config.json`，导致「参数配置」页保存的修改重启后被覆盖，与 §9 的「保存后重启生效」暂时不符。属调试用途，恢复读取逻辑后即恢复正常。
