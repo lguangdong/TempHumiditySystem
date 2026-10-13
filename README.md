@@ -134,11 +134,6 @@ TempHumiditySystem/
 
 在线判定：`SensorPoint.IsFresh()` 以「最近一次成功读取的时刻 `LastUpdateTick` 未超过 `StaleMs`（默认 3000ms，≈3 倍轮询周期）」为准；监控卡片与底栏"在线测点数"统一采用该口径。
 
-## 已知问题 / 注意事项
-
-- **配置暂不会持久化生效（调试期间的临时改动）**：`SystemConfig.LoadOrCreate()` 中「读取已有配置」的分支被临时注释，每次启动都会 `CreateSample()` 覆盖 `config.json`，因此「参数配置」页保存的修改会在下次启动被覆盖。属调试用途，恢复读取逻辑后即恢复正常。
-- `SensorPoint.Clone()` / `Device.Clone()` 目前无调用方（配置页已改为独立编辑集合），暂时保留。
-- `HexUtil` / `LogWriter` 为预留工具类，尚未接入主流程。
 
 ## 相关文档
 
