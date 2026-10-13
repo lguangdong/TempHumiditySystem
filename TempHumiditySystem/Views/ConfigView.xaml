@@ -7,6 +7,14 @@
             <TextBlock Text="参数配置" FontSize="18" FontWeight="Bold" VerticalAlignment="Center"/>
             <Button Content="保存" Width="80" Margin="24,0,0,0" Command="{Binding SaveCommand}"/>
             <Button Content="重新加载" Width="88" Margin="8,0,0,0" Command="{Binding ReloadCommand}"/>
+            <TextBlock Text="当前目录：" Margin="24,0,0,0" Foreground="#666" VerticalAlignment="Center"/>
+            <TextBlock Text="{Binding ConfigDirectory}"
+                       MaxWidth="320"
+                       TextTrimming="CharacterEllipsis"
+                       ToolTip="{Binding ConfigDirectory}"
+                       Foreground="#333"
+                       VerticalAlignment="Center"/>
+            <Button Content="选择目录" Width="80" Margin="8,0,0,0" Command="{Binding BrowseFolderCommand}"/>
             <TextBlock Text="{Binding StatusText}" Margin="16,0,0,0" Foreground="#666" VerticalAlignment="Center"/>
         </StackPanel>
 
