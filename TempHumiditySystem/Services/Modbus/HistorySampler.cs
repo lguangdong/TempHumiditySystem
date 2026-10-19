@@ -65,7 +65,9 @@ namespace TempHumiditySystem.Services.Modbus
             for (int i = 0; i < _sensors.Count; i++)
             {
                 var sensor = _sensors[i];
-                values[i] = sensor.CurrentValue;
+                // 离线/数据过期写 NaN：趋势图会自动断线，导出 CSV 时留空。
+                // 否则"从未读到值"会被记成 0，掉线后也会把最后一个陈旧值反复记成一条直线。
+                values[i] = sensor.IsFresh() ? sensor.CurrentValue : double.NaN;
             }
             _store.Add(new HistorySample()
             {

@@ -148,10 +148,14 @@ sensorValueUpdated(SensorPoint)  ──► AlarmEngine / ControlEngine
 
 ## 7. 历史数据
 
-- **HistorySampler**：后台线程每 `5000ms` 采样一次，遍历 `config.Sensors` 的 `CurrentValue` 生成 `HistorySample`（`Time` + `Values[]`）。
+- **HistorySampler**：后台线程每 `5000ms` 采样一次，遍历 `config.Sensors` 生成 `HistorySample`（`Time` + `Values[]`）。
+  - **离线写 NaN**：`sensor.IsFresh()` 为 false（未就绪/掉线/数据过期）时该列写 `double.NaN`，而不是 0 或最后一个陈旧值；趋势图据此断线，CSV 导出时该单元格留空。采样线程由「通信设置」页在连接成功后启动，断开时停止。
 - **HistoryStore**：`Queue<HistorySample>` 环形缓冲，`MaxSamples = 17280`（24h × 每 5s），超量自动出队。新增时触发 `historySampleAdded`。
   - **线程安全**：采样线程 `Add`、UI 线程 `GetAll()/Count`，所有集合访问用 `lock` 保护，`GetAll()` 返回数组快照；事件在锁外触发，避免订阅者回调造成死锁。
 - **趋势图（TrendViewModel）**：为每个测点建一条 `LineSeries<ObservablePoint>`，X 存 `DateTime.Ticks`，`Axis.Labeler` 校验 NaN/Infinity/Ticks 范围后转时间字符串（LiveCharts2 无数据时会传越界值，必须校验）。
+  - **点数上限**：每条曲线只保留最近 `Window`（默认 4 小时）的数据，另有 `MaxPointsPerSeries = 10000` 硬上限兜底；`Trim` 从头丢弃过期点，正常每次只移除 1 个点。避免长时间运行后内存与渲染持续膨胀。
+  - **索引映射**：曲线缓冲用 `HistorySample.Values` 的下标关联测点（`HistorySampler` 按 `config.Sensors` 顺序采样），不用测点名做键——重名测点会互相覆盖导致曲线不更新。
+  - 趋势页顶部提示"仅显示最近 4 小时"，历史数据本身仍保留 24h（见 `HistoryStore`）。
 
 ## 8. 页面与 ViewModel 映射
 

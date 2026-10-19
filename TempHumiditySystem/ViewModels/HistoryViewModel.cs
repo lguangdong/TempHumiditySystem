@@ -52,7 +52,11 @@ namespace TempHumiditySystem.ViewModels
             foreach (var sample in _store.GetAll())
             {
                 sb.Append(sample.Time.ToString("yyyy-MM-dd HH:mm:ss"));
-                foreach (var v in sample.Values) sb.Append(',').Append(v.ToString("F1"));
+                foreach (var v in sample.Values)
+                {
+                    // NaN 表示该时刻该测点无有效数据（离线/未就绪）：留空单元格，不写成 "NaN"
+                    sb.Append(',').Append(double.IsNaN(v) ? "" : v.ToString("F1"));
+                }
                 sb.AppendLine();
             }
 

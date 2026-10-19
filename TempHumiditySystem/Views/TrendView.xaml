@@ -3,7 +3,16 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:lvc="clr-namespace:LiveChartsCore.SkiaSharpView.WPF;assembly=LiveChartsCore.SkiaSharpView.WPF">
     <Grid Margin="16">
-        <lvc:CartesianChart
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <!-- 说明曲线只保留最近一段时间的点，避免用户误以为历史数据丢失 -->
+        <TextBlock Grid.Row="0" Text="{Binding WindowText}"
+                   Foreground="#888" Margin="0,0,0,8"/>
+
+        <lvc:CartesianChart Grid.Row="1"
             Series="{Binding Series}"
             XAxes="{Binding XAxes}"
             YAxes="{Binding YAxes}"
