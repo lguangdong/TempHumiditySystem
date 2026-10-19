@@ -1,0 +1,37 @@
+name: Build
+
+# 常规 CI：push 到主分支或提 PR 时编译一次，防止把编译不过的代码合进来
+# （发布流程见 release.yml，仅由 v* 标签触发）
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: 编译（Release）
+    runs-on: windows-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 安装 .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: 还原依赖
+        run: dotnet restore TempHumiditySystem.sln
+
+      - name: 编译
+        run: dotnet build TempHumiditySystem.sln -c Release --no-restore --nologo
+
+      - name: 编译摘要
+        if: always()
+        shell: pwsh
+        run: |
+          "### 编译结果：${{ job.status }}" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding utf8 -Append

@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.IO.Ports;
 using System.Text;
 using System.Text.Encodings.Web;
 using System.Text.Json;
@@ -31,6 +32,21 @@ namespace TempHumiditySystem.Models
         /// <summary>用户所选的 config.json 存放目录；为空表示沿用默认目录（%AppData%\TempHumiditySystem）。</summary>
         public string? ConfigDirectory { get; set; }
 
+        /// <summary>通信页上次使用的串口名（重启后恢复）。</summary>
+        public string? CommPortName { get; set; }
+
+        /// <summary>通信页上次使用的波特率。</summary>
+        public int? CommBaudRate { get; set; }
+
+        /// <summary>通信页上次使用的校验位。</summary>
+        public Parity? CommParity { get; set; }
+
+        /// <summary>通信页上次使用的停止位。</summary>
+        public StopBits? CommStopBits { get; set; }
+
+        /// <summary>最近一次导出 CSV 的完整路径（用于「打开最近导出目录」）。</summary>
+        public string? LastExportPath { get; set; }
+
         /// <summary>最近一次保存是否成功落盘（false 表示仅本次运行内存生效）。</summary>
         [JsonIgnore]
         public bool LastSavePersisted { get; private set; } = true;
@@ -48,6 +64,8 @@ namespace TempHumiditySystem.Models
             PropertyNameCaseInsensitive = true,
             // 让中文等非 ASCII 字符直接以 UTF-8 明文落盘，而不是转义成 \uXXXX
             Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
+            // 串口枚举以可读字符串保存（如 "None" / "One"），便于人工查看
+            Converters = { new JsonStringEnumConverter() },
         };
 
         /// <summary>从磁盘加载设置；文件不存在或损坏时返回空设置（视为未做选择，回退默认目录）。</summary>

@@ -3,6 +3,9 @@ using System.IO;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Threading;
+using LiveChartsCore;
+using LiveChartsCore.SkiaSharpView;
+using SkiaSharp;
 using TempHumiditySystem.Models.ModBus;
 using TempHumiditySystem.Services.Modbus;
 using TempHumiditySystem.Services.SerialAssistant;
@@ -18,6 +21,7 @@ namespace TempHumiditySystem
         // 退出时需要显式释放的资源（串口不关会导致下次启动/换程序时端口被占用）
         private SerialPortService? _port;
         private PollingService? _polling;
+        private MainWindowViewModel? _mainViewModel;
         private LogWriter? _log;
         private bool _errorDialogShown;   // 异常弹窗只弹一次，避免连环弹窗卡死界面
 
@@ -31,6 +35,17 @@ namespace TempHumiditySystem
             AppDomain.CurrentDomain.UnhandledException += OnDomainUnhandledException;
 
             StartLog();
+
+            // 加载共享界面资源：本机 WPF 生成的 App.g.cs 没有 InitializeComponent()，
+            // App.xaml 里的 Application.Resources 不会自动加载，因此显式合并 ResourceDictionary。
+            Resources.MergedDictionaries.Add(new ResourceDictionary
+            {
+                Source = new Uri("/TempHumiditySystem;component/Resources/DeviceToolTips.xaml", UriKind.Relative)
+            });
+
+            // LiveCharts 的默认字体不含中文字形，图例/坐标轴会显示成方块；改用系统中能显示中文的字体
+            var chartTypeface = SKFontManager.Default.MatchCharacter('汉') ?? SKTypeface.Default;
+            LiveCharts.Configure(config => config.HasGlobalSKTypeface(chartTypeface));
 
             // ===== 1. 组装全局引擎（每个都是全局唯一实例） =====
             var config = SystemConfig.LoadOrCreate();
@@ -69,6 +84,7 @@ namespace TempHumiditySystem
             // ===== 4. 创建主窗口，注入引擎 =====
             var mainViewModel = new MainWindowViewModel(
                 config, port, polling, collect, alarm, control, historyStore, historySampler);
+            _mainViewModel = mainViewModel;
 
             var window = new MainWindow { DataContext = mainViewModel };
             MainWindow = window;
@@ -87,6 +103,7 @@ namespace TempHumiditySystem
                 Directory.CreateDirectory(dir);
                 _log.Start(Path.Combine(dir, $"{DateTime.Now:yyyyMMdd}.log"));
                 _log.Write("==== 程序启动 ====");
+                _log.Flush();   // 启动记录立即落盘，避免异常退出时丢失
             }
             catch
             {
@@ -100,6 +117,10 @@ namespace TempHumiditySystem
         {
             var line = isError ? $"[错误] {message}" : message;
             _log?.Write(line);
+
+            // 错误日志立即落盘：LogWriter 默认每 20 条才 Flush，低频率运行时异常信息可能长时间留在缓冲里
+            if (isError) _log?.Flush();
+
             System.Diagnostics.Debug.WriteLine(line);
         }
 
@@ -133,7 +154,8 @@ namespace TempHumiditySystem
         protected override void OnExit(ExitEventArgs e)
         {
             WriteLog("==== 程序退出 ====");
-            _polling?.Stop();      // 先停轮询线程，再关串口
+            _mainViewModel?.Dispose();   // 先退订事件、停定时器
+            _polling?.Stop();           // 再停轮询线程，最后关串口
             _port?.Dispose();
             _log?.Dispose();
             base.OnExit(e);

@@ -1,118 +1,414 @@
-<UserControl x:Class="TempHumiditySystem.Views.ConfigView"
+﻿<UserControl x:Class="TempHumiditySystem.Views.ConfigView"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
-    <DockPanel Margin="16">
-        <!-- 顶部：标题 + 全局操作 -->
-        <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="0,0,0,12">
-            <TextBlock Text="参数配置" FontSize="18" FontWeight="Bold" VerticalAlignment="Center"/>
-            <Button Content="保存" Width="80" Margin="24,0,0,0" Command="{Binding SaveCommand}"/>
-            <Button Content="重新加载" Width="88" Margin="8,0,0,0" Command="{Binding ReloadCommand}"/>
-            <TextBlock Text="当前目录：" Margin="24,0,0,0" Foreground="#666" VerticalAlignment="Center"/>
-            <TextBlock Text="{Binding ConfigDirectory}"
-                       MaxWidth="320"
-                       TextTrimming="CharacterEllipsis"
-                       ToolTip="{Binding ConfigDirectory}"
-                       Foreground="#333"
-                       VerticalAlignment="Center"/>
-            <Button Content="选择目录" Width="80" Margin="8,0,0,0" Command="{Binding BrowseFolderCommand}"/>
-            <TextBlock Text="{Binding StatusText}" Margin="16,0,0,0" Foreground="#666" VerticalAlignment="Center"/>
-        </StackPanel>
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:cnv="clr-namespace:TempHumiditySystem.Converters">
+    <UserControl.Resources>
+        <cnv:NotNullToBoolConverter x:Key="NotNullToBool"/>
+        <cnv:EnumDescriptionConverter x:Key="EnumDesc"/>
+        <cnv:LimitConverter x:Key="Limit"/>
+        <BooleanToVisibilityConverter x:Key="BoolToVisibility"/>
 
+        <Style x:Key="FieldLabel" TargetType="TextBlock">
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="Foreground" Value="#666"/>
+        </Style>
+
+        <Style x:Key="FieldBox" TargetType="Control">
+            <Setter Property="Margin" Value="0,4"/>
+            <Setter Property="Height" Value="28"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+        </Style>
+
+        <Style x:Key="SectionTitle" TargetType="TextBlock">
+            <Setter Property="FontWeight" Value="Bold"/>
+            <Setter Property="Foreground" Value="#2C6FBB"/>
+            <Setter Property="Margin" Value="0,12,0,6"/>
+        </Style>
+    </UserControl.Resources>
+
+    <DockPanel Margin="16">
+        <!-- ===== 顶部工具条 ===== -->
+        <Border DockPanel.Dock="Top" BorderBrush="#E0E0E0" BorderThickness="0,0,0,1"
+                Padding="0,0,0,10" Margin="0,0,0,10">
+            <StackPanel>
+                <!-- 操作区：标题固定宽度，按钮用 WrapPanel，窗口变窄时自动换行而不是把路径挤没 -->
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+
+                    <TextBlock Grid.Column="0" Text="参数配置" FontSize="18" FontWeight="Bold"
+                               VerticalAlignment="Center" Margin="0,0,16,0"/>
+
+                    <WrapPanel Grid.Column="1" VerticalAlignment="Center">
+                        <Button Content="保存" Width="72" Margin="0,2,8,2" Command="{Binding SaveCommand}"/>
+                        <!-- 文案随状态切换：有未保存修改时是"放弃修改"，否则是"重新载入"（用于刷新外部改过的配置） -->
+                        <Button Width="84" Margin="0,2,8,2" Command="{Binding ReloadCommand}"
+                                ToolTip="从磁盘重新读取配置；有未保存修改时会先确认是否放弃">
+                            <Button.Style>
+                                <Style TargetType="Button">
+                                    <Setter Property="Content" Value="重新载入"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding IsDirty}" Value="True">
+                                            <Setter Property="Content" Value="放弃修改"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Button.Style>
+                        </Button>
+                        <Button Content="选择目录" Width="84" Margin="0,2,8,2" Command="{Binding BrowseFolderCommand}"/>
+                        <Button Content="打开目录" Width="84" Margin="0,2,8,2" Command="{Binding OpenConfigFolderCommand}"/>
+                        <Button Content="立即重启" Width="84" Margin="0,2,8,2"
+                                Command="{Binding RestartCommand}"
+                                IsEnabled="{Binding CanRestart}"
+                                ToolTip="保存后重启程序，让新配置生效"/>
+                        <TextBlock Text="● 有未保存修改" Foreground="#E67E22" VerticalAlignment="Center"
+                                   Margin="4,2,0,2"
+                                   Visibility="{Binding IsDirty, Converter={StaticResource BoolToVisibility}}"/>
+                    </WrapPanel>
+                </Grid>
+
+                <!-- 当前配置文件：独立一行，宽度跟随窗口并在过长时省略，鼠标悬停可看完整路径 -->
+                <Grid Margin="0,8,0,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Grid.Column="0" Text="配置文件：" Foreground="#888"/>
+                    <TextBlock Grid.Column="1" Text="{Binding ConfigPath}" Foreground="#666"
+                               TextTrimming="CharacterEllipsis"
+                               ToolTip="{Binding ConfigPath}"/>
+                </Grid>
+            </StackPanel>
+        </Border>
+
+        <!-- ===== 底部状态 ===== -->
+        <Border DockPanel.Dock="Bottom" Padding="0,8,0,0">
+            <TextBlock Text="{Binding StatusText}" Foreground="#666" TextWrapping="Wrap"/>
+        </Border>
+
+        <!-- ===== 主体 ===== -->
         <TabControl>
-            <!-- ============ 测点配置 ============ -->
+            <!-- ==================== 测点配置 ==================== -->
             <TabItem Header="测点配置">
-                <DockPanel Margin="8">
-                    <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Margin="0,8,0,0">
-                        <Button Content="添加测点" Command="{Binding AddSensorCommand}"/>
-                        <Button Content="删除选中" Margin="8,0,0,0" Command="{Binding DeleteSensorCommand}"/>
-                        <TextBlock Text="提示：保存后重启生效" Foreground="#999" Margin="16,0,0,0" VerticalAlignment="Center"/>
-                    </StackPanel>
-                    <DataGrid ItemsSource="{Binding Sensors}"
-                              SelectedItem="{Binding SelectedSensor}"
-                              AutoGenerateColumns="False"
-                              CanUserAddRows="False"
-                              CanUserDeleteRows="False"
-                              HeadersVisibility="Column"
-                              GridLinesVisibility="All">
-                        <DataGrid.Columns>
-                            <DataGridTextColumn Header="名称" Width="110" Binding="{Binding Name}"/>
-                            <DataGridTextColumn Header="分组" Width="90" Binding="{Binding GroupName}"/>
-                            <DataGridTextColumn Header="从站" Width="60" Binding="{Binding SlaveId}"/>
-                            <DataGridTextColumn Header="寄存器地址" Width="90" Binding="{Binding RegisterAddress}"/>
-                            <DataGridTemplateColumn Header="数据类型" Width="90">
-                                <DataGridTemplateColumn.CellTemplate>
-                                    <DataTemplate>
-                                        <TextBlock Text="{Binding DataType}" VerticalAlignment="Center"/>
-                                    </DataTemplate>
-                                </DataGridTemplateColumn.CellTemplate>
-                                <DataGridTemplateColumn.CellEditingTemplate>
-                                    <DataTemplate>
-                                        <ComboBox ItemsSource="{Binding DataContext.DataTypes, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                                                  SelectedItem="{Binding DataType, UpdateSourceTrigger=PropertyChanged}"/>
-                                    </DataTemplate>
-                                </DataGridTemplateColumn.CellEditingTemplate>
-                            </DataGridTemplateColumn>
-                            <DataGridTextColumn Header="系数" Width="60" Binding="{Binding Scale}"/>
-                            <DataGridTextColumn Header="单位" Width="50" Binding="{Binding Unit}"/>
-                            <DataGridTemplateColumn Header="类别" Width="90">
-                                <DataGridTemplateColumn.CellTemplate>
-                                    <DataTemplate>
-                                        <TextBlock Text="{Binding Category}" VerticalAlignment="Center"/>
-                                    </DataTemplate>
-                                </DataGridTemplateColumn.CellTemplate>
-                                <DataGridTemplateColumn.CellEditingTemplate>
-                                    <DataTemplate>
-                                        <ComboBox ItemsSource="{Binding DataContext.Categories, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                                                  SelectedItem="{Binding Category, UpdateSourceTrigger=PropertyChanged}"/>
-                                    </DataTemplate>
-                                </DataGridTemplateColumn.CellEditingTemplate>
-                            </DataGridTemplateColumn>
-                            <DataGridTextColumn Header="上限" Width="70" Binding="{Binding HighLimit, StringFormat=F1}"/>
-                            <DataGridTextColumn Header="下限" Width="70" Binding="{Binding LowLimit, StringFormat=F1}"/>
-                        </DataGrid.Columns>
-                    </DataGrid>
-                </DockPanel>
+                <Grid Margin="8">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="360"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+
+                    <!-- 左：列表 -->
+                    <DockPanel Grid.Column="0">
+                        <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Margin="0,8,0,0">
+                            <Button Content="添加测点" Width="88" Command="{Binding AddSensorCommand}"/>
+                            <Button Content="删除选中" Width="88" Margin="8,0,0,0" Command="{Binding DeleteSensorCommand}"/>
+                            <TextBlock Text="保存后重启生效" Foreground="#999" VerticalAlignment="Center" Margin="12,0,0,0"/>
+                        </StackPanel>
+
+                        <DataGrid ItemsSource="{Binding Sensors}"
+                                  SelectedItem="{Binding SelectedSensor}"
+                                  AutoGenerateColumns="False"
+                                  CanUserAddRows="False"
+                                  CanUserDeleteRows="False"
+                                  IsReadOnly="True"
+                                  SelectionMode="Single"
+                                  HeadersVisibility="Column"
+                                  GridLinesVisibility="Horizontal">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="名称" Width="*" Binding="{Binding Name}"/>
+                                <DataGridTextColumn Header="分组" Width="80" Binding="{Binding GroupName}"/>
+                                <DataGridTextColumn Header="从站" Width="46" Binding="{Binding SlaveId}"/>
+                                <DataGridTextColumn Header="地址" Width="56" Binding="{Binding RegisterAddress}"/>
+                                <DataGridTemplateColumn Header="" Width="30">
+                                    <DataGridTemplateColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <TextBlock Text="⚠" Foreground="#E53935" HorizontalAlignment="Center"
+                                                       Visibility="{Binding HasError, Converter={StaticResource BoolToVisibility}}"
+                                                       ToolTip="{Binding ExternalError}"/>
+                                        </DataTemplate>
+                                    </DataGridTemplateColumn.CellTemplate>
+                                </DataGridTemplateColumn>
+                            </DataGrid.Columns>
+                        </DataGrid>
+                    </DockPanel>
+
+                    <!-- 右：表单 -->
+                    <Border Grid.Column="1" Margin="12,0,0,0" BorderBrush="#E0E0E0"
+                            BorderThickness="1" CornerRadius="4" Padding="14">
+                        <DockPanel>
+                            <TextBlock DockPanel.Dock="Top" Text="← 请在左侧选择一个测点"
+                                       Foreground="#AAA" Margin="0,0,0,8">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding SelectedSensor}" Value="{x:Null}">
+                                                <Setter Property="Visibility" Value="Visible"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
+
+                            <ScrollViewer VerticalScrollBarVisibility="Auto"
+                                          IsEnabled="{Binding SelectedSensor, Converter={StaticResource NotNullToBool}}">
+                                <StackPanel DataContext="{Binding SelectedSensor}">
+
+                                    <TextBlock Text="基本信息" Style="{StaticResource SectionTitle}" Margin="0,0,0,6"/>
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="76"/>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="76"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="Auto"/>
+                                        </Grid.RowDefinitions>
+
+                                        <!-- 名称 / 分组 -->
+                                        <TextBlock Grid.Row="0" Grid.Column="0" Text="名称" Style="{StaticResource FieldLabel}"/>
+                                        <TextBox Grid.Row="0" Grid.Column="1" Style="{StaticResource FieldBox}"
+                                                 Text="{Binding Name, UpdateSourceTrigger=PropertyChanged, ValidatesOnNotifyDataErrors=True}"/>
+                                        <TextBlock Grid.Row="0" Grid.Column="2" Text="分组"
+                                                   Style="{StaticResource FieldLabel}" Margin="12,0,0,0"/>
+                                        <Grid Grid.Row="0" Grid.Column="3" Margin="0,4">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="26"/>
+                                            </Grid.ColumnDefinitions>
+                                            <TextBox Style="{StaticResource FieldBox}" Margin="0"
+                                                     Text="{Binding GroupName, UpdateSourceTrigger=PropertyChanged}"/>
+                                            <ComboBox Grid.Column="1" Height="28" Margin="4,0,0,0" Padding="0"
+                                                      IsEditable="False"
+                                                      ItemsSource="{Binding DataContext.SensorGroups, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                      SelectedItem="{Binding DataContext.GroupPicker, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                      ToolTip="从已有分组中选择"/>
+                                        </Grid>
+
+                                        <!-- 类别 / 单位 -->
+                                        <TextBlock Grid.Row="1" Grid.Column="0" Text="类别" Style="{StaticResource FieldLabel}"/>
+                                        <ComboBox Grid.Row="1" Grid.Column="1" Style="{StaticResource FieldBox}"
+                                                  ItemsSource="{Binding DataContext.Categories, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                  SelectedItem="{Binding Category}">
+                                            <ComboBox.ItemTemplate>
+                                                <DataTemplate>
+                                                    <TextBlock Text="{Binding Converter={StaticResource EnumDesc}}"/>
+                                                </DataTemplate>
+                                            </ComboBox.ItemTemplate>
+                                        </ComboBox>
+                                        <TextBlock Grid.Row="1" Grid.Column="2" Text="单位"
+                                                   Style="{StaticResource FieldLabel}" Margin="12,0,0,0"/>
+                                        <TextBox Grid.Row="1" Grid.Column="3" Style="{StaticResource FieldBox}"
+                                                 Text="{Binding Unit, UpdateSourceTrigger=PropertyChanged}"/>
+
+                                        <!-- 从站 / 寄存器地址 -->
+                                        <TextBlock Grid.Row="2" Grid.Column="0" Text="从站地址" Style="{StaticResource FieldLabel}"/>
+                                        <TextBox Grid.Row="2" Grid.Column="1" Style="{StaticResource FieldBox}"
+                                                 Text="{Binding SlaveId, UpdateSourceTrigger=LostFocus, ValidatesOnNotifyDataErrors=True}"/>
+                                        <TextBlock Grid.Row="2" Grid.Column="2" Text="寄存器" Margin="12,0,0,0"
+                                                   Style="{StaticResource FieldLabel}"/>
+                                        <TextBox Grid.Row="2" Grid.Column="3" Style="{StaticResource FieldBox}"
+                                                 Text="{Binding RegisterAddress, UpdateSourceTrigger=LostFocus, ValidatesOnNotifyDataErrors=True}"/>
+
+                                        <!-- 数据类型 / 系数 -->
+                                        <TextBlock Grid.Row="3" Grid.Column="0" Text="数据类型" Style="{StaticResource FieldLabel}"/>
+                                        <ComboBox Grid.Row="3" Grid.Column="1" Style="{StaticResource FieldBox}"
+                                                  ItemsSource="{Binding DataContext.DataTypes, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                  SelectedItem="{Binding DataType}">
+                                            <ComboBox.ItemTemplate>
+                                                <DataTemplate>
+                                                    <TextBlock Text="{Binding Converter={StaticResource EnumDesc}}"/>
+                                                </DataTemplate>
+                                            </ComboBox.ItemTemplate>
+                                        </ComboBox>
+                                        <TextBlock Grid.Row="3" Grid.Column="2" Text="系数"
+                                                   Style="{StaticResource FieldLabel}" Margin="12,0,0,0"/>
+                                        <TextBox Grid.Row="3" Grid.Column="3" Style="{StaticResource FieldBox}"
+                                                 Text="{Binding Scale, UpdateSourceTrigger=LostFocus, ValidatesOnNotifyDataErrors=True}"
+                                                 ToolTip="物理值 = 原始值 × 系数"/>
+
+                                        <!-- 上限 / 下限 -->
+                                        <TextBlock Grid.Row="4" Grid.Column="0" Text="报警上限" Style="{StaticResource FieldLabel}"/>
+                                        <TextBox Grid.Row="4" Grid.Column="1" Style="{StaticResource FieldBox}"
+                                                 Text="{Binding HighLimit, Converter={StaticResource Limit}, ConverterParameter=High,
+                                                                UpdateSourceTrigger=LostFocus, ValidatesOnNotifyDataErrors=True}"
+                                                 ToolTip="留空表示不设上限"/>
+                                        <TextBlock Grid.Row="4" Grid.Column="2" Text="报警下限"
+                                                   Style="{StaticResource FieldLabel}" Margin="12,0,0,0"/>
+                                        <TextBox Grid.Row="4" Grid.Column="3" Style="{StaticResource FieldBox}"
+                                                 Text="{Binding LowLimit, Converter={StaticResource Limit}, ConverterParameter=Low,
+                                                                UpdateSourceTrigger=LostFocus, ValidatesOnNotifyDataErrors=True}"
+                                                 ToolTip="留空表示不设下限"/>
+                                    </Grid>
+
+                                    <TextBlock Text="该测点的原始值按「数据类型」解释后乘以「系数」得到物理值；同一从站下寄存器地址不能重复。"
+                                               Foreground="#999" TextWrapping="Wrap" Margin="0,14,0,0"/>
+                                    <TextBlock Text="⚠ 校验未通过的行会在左侧列表显示红色标记，鼠标悬停可查看原因。"
+                                               Foreground="#999" TextWrapping="Wrap" Margin="0,4,0,0"/>
+                                </StackPanel>
+                            </ScrollViewer>
+                        </DockPanel>
+                    </Border>
+                </Grid>
             </TabItem>
 
-            <!-- ============ 设备配置 ============ -->
+            <!-- ==================== 设备配置 ==================== -->
             <TabItem Header="设备配置">
-                <DockPanel Margin="8">
-                    <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Margin="0,8,0,0">
-                        <Button Content="添加设备" Command="{Binding AddDeviceCommand}"/>
-                        <Button Content="删除选中" Margin="8,0,0,0" Command="{Binding DeleteDeviceCommand}"/>
-                        <TextBlock Text="提示：保存后重启生效" Foreground="#999" Margin="16,0,0,0" VerticalAlignment="Center"/>
-                    </StackPanel>
-                    <DataGrid ItemsSource="{Binding Devices}"
-                              SelectedItem="{Binding SelectedDevice}"
-                              AutoGenerateColumns="False"
-                              CanUserAddRows="False"
-                              CanUserDeleteRows="False"
-                              HeadersVisibility="Column"
-                              GridLinesVisibility="All">
-                        <DataGrid.Columns>
-                            <DataGridTextColumn Header="名称" Width="100" Binding="{Binding Name}"/>
-                            <DataGridTemplateColumn Header="类型" Width="90">
-                                <DataGridTemplateColumn.CellTemplate>
-                                    <DataTemplate>
-                                        <TextBlock Text="{Binding Type}" VerticalAlignment="Center"/>
-                                    </DataTemplate>
-                                </DataGridTemplateColumn.CellTemplate>
-                                <DataGridTemplateColumn.CellEditingTemplate>
-                                    <DataTemplate>
-                                        <ComboBox ItemsSource="{Binding DataContext.DeviceTypes, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                                                  SelectedItem="{Binding Type, UpdateSourceTrigger=PropertyChanged}"/>
-                                    </DataTemplate>
-                                </DataGridTemplateColumn.CellEditingTemplate>
-                            </DataGridTemplateColumn>
-                            <DataGridTextColumn Header="从站" Width="60" Binding="{Binding SlaveId}"/>
-                            <DataGridTextColumn Header="写地址" Width="80" Binding="{Binding WriteAddress}"/>
-                            <DataGridTextColumn Header="关联测点" Width="110" Binding="{Binding LinkedSensorName}"/>
-                            <DataGridTextColumn Header="开启值" Width="70" Binding="{Binding OnAt, StringFormat=F1}"/>
-                            <DataGridTextColumn Header="关闭值" Width="70" Binding="{Binding OffAt, StringFormat=F1}"/>
-                            <DataGridCheckBoxColumn Header="低于开启值启动" Width="120" Binding="{Binding TurnsOnBelow}"/>
-                        </DataGrid.Columns>
-                    </DataGrid>
-                </DockPanel>
+                <Grid Margin="8">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="360"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+
+                    <DockPanel Grid.Column="0">
+                        <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Margin="0,8,0,0">
+                            <Button Content="添加设备" Width="88" Command="{Binding AddDeviceCommand}"/>
+                            <Button Content="删除选中" Width="88" Margin="8,0,0,0" Command="{Binding DeleteDeviceCommand}"/>
+                            <TextBlock Text="保存后重启生效" Foreground="#999" VerticalAlignment="Center" Margin="12,0,0,0"/>
+                        </StackPanel>
+
+                        <DataGrid ItemsSource="{Binding Devices}"
+                                  SelectedItem="{Binding SelectedDevice}"
+                                  AutoGenerateColumns="False"
+                                  CanUserAddRows="False"
+                                  CanUserDeleteRows="False"
+                                  IsReadOnly="True"
+                                  SelectionMode="Single"
+                                  HeadersVisibility="Column"
+                                  GridLinesVisibility="Horizontal">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="名称" Width="*" Binding="{Binding Name}"/>
+                                <DataGridTemplateColumn Header="类型" Width="70">
+                                    <DataGridTemplateColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <TextBlock Text="{Binding Type, Converter={StaticResource EnumDesc}}"/>
+                                        </DataTemplate>
+                                    </DataGridTemplateColumn.CellTemplate>
+                                </DataGridTemplateColumn>
+                                <DataGridTextColumn Header="从站" Width="46" Binding="{Binding SlaveId}"/>
+                                <DataGridTextColumn Header="写地址" Width="58" Binding="{Binding WriteAddress}"/>
+                                <DataGridTemplateColumn Header="" Width="30">
+                                    <DataGridTemplateColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <TextBlock Text="⚠" Foreground="#E53935" HorizontalAlignment="Center"
+                                                       Visibility="{Binding HasError, Converter={StaticResource BoolToVisibility}}"
+                                                       ToolTip="{Binding ExternalError}"/>
+                                        </DataTemplate>
+                                    </DataGridTemplateColumn.CellTemplate>
+                                </DataGridTemplateColumn>
+                            </DataGrid.Columns>
+                        </DataGrid>
+                    </DockPanel>
+
+                    <Border Grid.Column="1" Margin="12,0,0,0" BorderBrush="#E0E0E0"
+                            BorderThickness="1" CornerRadius="4" Padding="14">
+                        <DockPanel>
+                            <TextBlock DockPanel.Dock="Top" Text="← 请在左侧选择一台设备"
+                                       Foreground="#AAA" Margin="0,0,0,8">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding SelectedDevice}" Value="{x:Null}">
+                                                <Setter Property="Visibility" Value="Visible"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
+
+                            <ScrollViewer VerticalScrollBarVisibility="Auto"
+                                          IsEnabled="{Binding SelectedDevice, Converter={StaticResource NotNullToBool}}">
+                                <StackPanel DataContext="{Binding SelectedDevice}">
+
+                                    <TextBlock Text="基本信息" Style="{StaticResource SectionTitle}" Margin="0,0,0,6"/>
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="76"/>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="76"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="Auto"/>
+                                        </Grid.RowDefinitions>
+
+                                        <!-- 名称 / 类型 -->
+                                        <TextBlock Grid.Row="0" Grid.Column="0" Text="名称" Style="{StaticResource FieldLabel}"/>
+                                        <TextBox Grid.Row="0" Grid.Column="1" Style="{StaticResource FieldBox}"
+                                                 Text="{Binding Name, UpdateSourceTrigger=PropertyChanged, ValidatesOnNotifyDataErrors=True}"/>
+                                        <TextBlock Grid.Row="0" Grid.Column="2" Text="类型"
+                                                   Style="{StaticResource FieldLabel}" Margin="12,0,0,0"/>
+                                        <ComboBox Grid.Row="0" Grid.Column="3" Style="{StaticResource FieldBox}"
+                                                  ItemsSource="{Binding DataContext.DeviceTypes, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                  SelectedItem="{Binding Type}">
+                                            <ComboBox.ItemTemplate>
+                                                <DataTemplate>
+                                                    <TextBlock Text="{Binding Converter={StaticResource EnumDesc}}"/>
+                                                </DataTemplate>
+                                            </ComboBox.ItemTemplate>
+                                        </ComboBox>
+
+                                        <!-- 从站 / 写地址 -->
+                                        <TextBlock Grid.Row="1" Grid.Column="0" Text="从站地址" Style="{StaticResource FieldLabel}"/>
+                                        <TextBox Grid.Row="1" Grid.Column="1" Style="{StaticResource FieldBox}"
+                                                 Text="{Binding SlaveId, UpdateSourceTrigger=LostFocus, ValidatesOnNotifyDataErrors=True}"/>
+                                        <TextBlock Grid.Row="1" Grid.Column="2" Text="写地址"
+                                                   Style="{StaticResource FieldLabel}" Margin="12,0,0,0"/>
+                                        <TextBox Grid.Row="1" Grid.Column="3" Style="{StaticResource FieldBox}"
+                                                 Text="{Binding WriteAddress, UpdateSourceTrigger=LostFocus, ValidatesOnNotifyDataErrors=True}"
+                                                 ToolTip="功能码 06 写单个寄存器：0 = 停止，1 = 运行"/>
+
+                                        <!-- 关联测点 -->
+                                        <TextBlock Grid.Row="2" Grid.Column="0" Text="关联测点" Style="{StaticResource FieldLabel}"/>
+                                        <Grid Grid.Row="2" Grid.Column="1" Grid.ColumnSpan="3" Margin="0,4">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="26"/>
+                                            </Grid.ColumnDefinitions>
+                                            <TextBox Style="{StaticResource FieldBox}" Margin="0"
+                                                     Text="{Binding LinkedSensorName, UpdateSourceTrigger=PropertyChanged}"
+                                                     ToolTip="自动控制只响应该测点的数据"/>
+                                            <ComboBox Grid.Column="1" Height="28" Margin="4,0,0,0" Padding="0"
+                                                      IsEditable="False"
+                                                      ItemsSource="{Binding DataContext.SensorNames, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                      SelectedItem="{Binding DataContext.SensorPicker, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                      ToolTip="从现有测点中选择"/>
+                                        </Grid>
+
+                                        <!-- 开启值 / 关闭值 -->
+                                        <TextBlock Grid.Row="3" Grid.Column="0" Text="开启值" Style="{StaticResource FieldLabel}"/>
+                                        <TextBox Grid.Row="3" Grid.Column="1" Style="{StaticResource FieldBox}"
+                                                 Text="{Binding OnAt, UpdateSourceTrigger=LostFocus, ValidatesOnNotifyDataErrors=True}"/>
+                                        <TextBlock Grid.Row="3" Grid.Column="2" Text="关闭值"
+                                                   Style="{StaticResource FieldLabel}" Margin="12,0,0,0"/>
+                                        <TextBox Grid.Row="3" Grid.Column="3" Style="{StaticResource FieldBox}"
+                                                 Text="{Binding OffAt, UpdateSourceTrigger=LostFocus, ValidatesOnNotifyDataErrors=True}"/>
+
+                                        <CheckBox Grid.Row="4" Grid.Column="1" Grid.ColumnSpan="3" Margin="0,12,0,0"
+                                                  Content="低于开启值时启动（升温类：加热器 / 加湿器）"
+                                                  IsChecked="{Binding TurnsOnBelow}"/>
+                                    </Grid>
+
+                                    <TextBlock Text="开启值 / 关闭值构成迟滞区间，避免设备在阈值附近频繁启停。"
+                                               Foreground="#999" TextWrapping="Wrap" Margin="0,14,0,0"/>
+                                    <TextBlock Text="升温类需满足「开启值 &lt; 关闭值」，降温类相反；关联测点必须存在于测点列表中。"
+                                               Foreground="#999" TextWrapping="Wrap" Margin="0,4,0,0"/>
+                                </StackPanel>
+                            </ScrollViewer>
+                        </DockPanel>
+                    </Border>
+                </Grid>
             </TabItem>
         </TabControl>
     </DockPanel>

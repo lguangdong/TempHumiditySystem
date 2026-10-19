@@ -9,6 +9,8 @@
             <ComboBox Width="140" IsEditable="True"
                       ItemsSource="{Binding Ports}"
                       Text="{Binding PortName, UpdateSourceTrigger=PropertyChanged}"/>
+            <Button Content="刷新" Width="56" Margin="8,0,0,0" Command="{Binding RefreshPortsCommand}"
+                    ToolTip="重新枚举串口（插入 USB 转串口后点一下）"/>
         </StackPanel>
 
         <StackPanel Orientation="Horizontal" Margin="0,0,0,10">

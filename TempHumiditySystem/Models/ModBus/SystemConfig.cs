@@ -57,10 +57,11 @@ namespace TempHumiditySystem.Models.ModBus
             PropertyNameCaseInsensitive = true,
             // 让中文等非 ASCII 字符直接以 UTF-8 明文落盘，而不是转义成 \uXXXX
             Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
-            Converters = { new JsonStringEnumConverter() },
+            // 专用转换器必须排在 JsonStringEnumConverter 之前：否则未知枚举名会让整份配置反序列化失败
+            Converters = { new ModbusDataTypeConverter(), new JsonStringEnumConverter() },
         };
 
-        /// <summary>加载配置；文件不存在或损坏时，用示例配置生成并落盘。</summary>
+        /// <summary>加载配置；文件不存在或损坏时，用示例配置生成并落盘（损坏文件会先改名备份）。</summary>
         public static SystemConfig LoadOrCreate(string? path = null)
         {
             path ??= ResolvePath();
@@ -76,23 +77,69 @@ namespace TempHumiditySystem.Models.ModBus
             }
             catch
             {
-                // 配置损坏时回退到示例配置
+                // 解析失败：先把损坏文件改名备份，避免下面写示例配置时把用户数据彻底覆盖
+                TryBackupCorrupt(path);
             }
 
             var sample = CreateSample();
-            sample.Save(path);
+            try
+            {
+                sample.Save(path);
+            }
+            catch
+            {
+                // 目录不可写（如 Program Files）：示例配置仅本次运行内存生效，不阻断启动
+            }
             return sample;
         }
 
-        /// <summary>保存到 JSON 文件。</summary>
+        /// <summary>把损坏的配置文件改名为 config.json.corrupt-yyyyMMdd_HHmmss，保留现场。</summary>
+        private static void TryBackupCorrupt(string path)
+        {
+            try
+            {
+                if (!File.Exists(path)) return;
+                var backup = $"{path}.corrupt-{DateTime.Now:yyyyMMdd_HHmmss}";
+                File.Move(path, backup, overwrite: true);
+            }
+            catch
+            {
+                // 备份失败也不能阻断启动
+            }
+        }
+
+        /// <summary>
+        /// 保存到 JSON 文件：先写 .tmp，再原子替换目标文件，并把上一份保留为 .bak。
+        /// 这样即使写到一半断电/崩溃，也不会留下半截的 config.json。
+        /// </summary>
         public void Save(string? path = null)
         {
             path ??= ResolvePath();
             var dir = Path.GetDirectoryName(path);
             if (!string.IsNullOrEmpty(dir))
                 Directory.CreateDirectory(dir);
+
             var json = JsonSerializer.Serialize(this, Options);
-            File.WriteAllText(path, json, Utf8WithBom);
+            var tmp = path + ".tmp";
+            File.WriteAllText(tmp, json, Utf8WithBom);
+
+            if (!File.Exists(path))
+            {
+                File.Move(tmp, path, overwrite: true);
+                return;
+            }
+
+            try
+            {
+                // 原子替换，并把原文件保留为 .bak
+                File.Replace(tmp, path, path + ".bak", ignoreMetadataErrors: true);
+            }
+            catch (Exception)
+            {
+                // 部分网络盘/权限场景不支持 Replace：退化为"先备份再覆盖"
+                File.Copy(path, path + ".bak", overwrite: true);
+                File.Move(tmp, path, overwrite: true);
+            }
         }
 
 

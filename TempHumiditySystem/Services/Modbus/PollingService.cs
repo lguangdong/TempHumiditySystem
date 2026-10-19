@@ -174,6 +174,13 @@ namespace TempHumiditySystem.Services.Modbus
             {
                 PollItem[] snapshot;
                 lock (pollItemsLock) snapshot = pollItems.ToArray();
+
+                long nextDue = long.MaxValue;
+                foreach (PollItem item in snapshot)
+                {
+                    if (item.nextPollTick < nextDue) nextDue = item.nextPollTick;
+                }
+
                 foreach (PollItem item in snapshot)
                 {
                     if (ct.IsCancellationRequested) break;
@@ -195,7 +202,11 @@ namespace TempHumiditySystem.Services.Modbus
                         OnFail(ct);
                     }
                 }
-                ct.WaitHandle.WaitOne(50);
+                // 按最近的到期时间等待，避免固定 50ms 空转；上限 50ms 保证能及时响应 Stop/Cancel
+                int waitMs = nextDue == long.MaxValue
+                    ? 50
+                    : (int)Math.Clamp(nextDue - Environment.TickCount64, 1, 50);
+                ct.WaitHandle.WaitOne(waitMs);
             }
         }
 

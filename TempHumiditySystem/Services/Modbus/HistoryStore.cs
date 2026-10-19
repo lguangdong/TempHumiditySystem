@@ -12,7 +12,8 @@ namespace TempHumiditySystem.Services.Modbus
     {
         private readonly object _sync = new();
         private readonly Queue<HistorySample> _historySamples = new();
-        private const int MaxSamples = 17280; //24h 每5s采样一次
+        private DateTime? _lastSampleTime;
+        private const int MaxSamples = 86400; //24h × 每 1s 采样一次
 
         public event Action<HistorySample>? historySampleAdded;
 
@@ -21,6 +22,8 @@ namespace TempHumiditySystem.Services.Modbus
             lock (_sync)
             {
                 _historySamples.Enqueue(sample);
+                _lastSampleTime = sample.Time;
+
                 while (_historySamples.Count > MaxSamples)
                 {
                     _historySamples.Dequeue();
@@ -45,6 +48,24 @@ namespace TempHumiditySystem.Services.Modbus
             get
             {
                 lock (_sync) return _historySamples.Count;
+            }
+        }
+
+        /// <summary>最早一条样本的时间；无数据时为 null。</summary>
+        public DateTime? FirstSampleTime
+        {
+            get
+            {
+                lock (_sync) return _historySamples.Count == 0 ? null : _historySamples.Peek().Time;
+            }
+        }
+
+        /// <summary>最新一条样本的时间；无数据时为 null。</summary>
+        public DateTime? LastSampleTime
+        {
+            get
+            {
+                lock (_sync) return _lastSampleTime;
             }
         }
     }

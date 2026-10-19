@@ -132,7 +132,15 @@
                 <ItemsControl.ItemTemplate>
                     <DataTemplate>
                         <Border Margin="4" Padding="10,6" BorderBrush="#DDDDDD"
-                                BorderThickness="1" CornerRadius="4">
+                                BorderThickness="1" CornerRadius="4"
+                                ToolTipService.InitialShowDelay="300"
+                                ToolTipService.ShowDuration="20000">
+                            <Border.ToolTip>
+                                <ToolTip DataContext="{Binding PlacementTarget.DataContext,
+                                                              RelativeSource={RelativeSource Self}}"
+                                         Content="{Binding}"
+                                         ContentTemplate="{StaticResource DeviceToolTipTemplate}"/>
+                            </Border.ToolTip>
                             <StackPanel Orientation="Horizontal">
                                 <TextBlock Text="{Binding Name}" FontWeight="Bold" Margin="0,0,8,0"/>
                                 <TextBlock Text="{Binding TypeName}" Foreground="Gray" Margin="0,0,8,0"/>

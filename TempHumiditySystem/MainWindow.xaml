@@ -5,6 +5,7 @@
         xmlns:views="clr-namespace:TempHumiditySystem.Views"
         Title="温湿度采集控制系统"
         Height="720" Width="1200"
+        MinWidth="1024" MinHeight="640"
         WindowStartupLocation="CenterScreen">
     <Grid>
         <Grid.RowDefinitions>

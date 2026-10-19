@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using System.Text.Json.Serialization;
 
@@ -6,10 +7,17 @@ namespace TempHumiditySystem.Models.ModBus
     /// <summary>设备类型。</summary>
     public enum DeviceType
     {
-        Heater,         // 加热器（升温）
-        Humidifier,     // 加湿器（增湿）
-        Dehumidifier,   // 除湿机（降湿）
-        Fan,            // 风机（通风）
+        [Description("加热器")]
+        Heater,         // 升温
+
+        [Description("加湿器")]
+        Humidifier,     // 增湿
+
+        [Description("除湿机")]
+        Dehumidifier,   // 降湿
+
+        [Description("风机")]
+        Fan,            // 通风
     }
 
     /// <summary>控制模式。</summary>
@@ -58,6 +66,22 @@ namespace TempHumiditySystem.Models.ModBus
             DeviceType.Fan => "风机",
             _ => Type.ToString(),
         };
+
+        /// <summary>当前控制模式的中文文案（供界面展示）。</summary>
+        [JsonIgnore]
+        public string ModeText => Mode == ControlMode.Auto ? "自动" : "手动";
+
+        /// <summary>关联测点的展示文案。</summary>
+        [JsonIgnore]
+        public string LinkedSensorText => string.IsNullOrWhiteSpace(LinkedSensorName) ? "未关联测点" : LinkedSensorName;
+
+        /// <summary>自动控制规则的可读描述（提示气泡用）。</summary>
+        [JsonIgnore]
+        public string ControlRuleText => TurnsOnBelow
+            ? $"测点值 ≤ {OnAt:0.#} 时开启，≥ {OffAt:0.#} 时关闭"
+            : $"测点值 ≥ {OnAt:0.#} 时开启，≤ {OffAt:0.#} 时关闭";
+
+        partial void OnModeChanged(ControlMode value) => OnPropertyChanged(nameof(ModeText));
 
         /// <summary>拷贝静态配置（不含运行时状态 Mode/IsRunning），供配置编辑页使用。</summary>
         public Device Clone() => new Device

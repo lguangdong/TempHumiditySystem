@@ -1,22 +1,28 @@
 using System;
+using System.ComponentModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using System.Text.Json.Serialization;
 
 namespace TempHumiditySystem.Models.ModBus
 {
-    /// <summary>测点读取的原始数据类型。</summary>
+    /// <summary>测点读取的原始数据类型（每个测点固定占用 1 个保持寄存器）。</summary>
     public enum ModbusDataType
     {
-        UInt16,   // 无符号 16 位（1 个寄存器）
-        Int16,    // 有符号 16 位（1 个寄存器）
-        Float32,  // 32 位浮点（2 个寄存器）
+        [Description("无符号")]
+        UInt16,
+
+        [Description("有符号")]
+        Int16,
     }
 
     /// <summary>测点类别。</summary>
     public enum SensorCategory
     {
-        Temperature,   // 温度
-        Humidity,      // 湿度
+        [Description("温度")]
+        Temperature,
+
+        [Description("湿度")]
+        Humidity,
     }
 
     /// <summary>
@@ -62,10 +68,10 @@ namespace TempHumiditySystem.Models.ModBus
         public bool IsFresh(long staleMs = StaleMs)
             => IsOnline && Environment.TickCount64 - LastUpdateTick <= staleMs;
 
-        /// <summary>原始值 → 物理值（乘系数）。</summary>
+        /// <summary>原始值 → 物理值（按数据类型处理符号位，再乘系数）。</summary>
         public double ToPhysical(ushort raw)
         {
-            double value = DataType switch { ModbusDataType.Int16 => (short)raw, _ => raw };
+            double value = DataType == ModbusDataType.Int16 ? (short)raw : raw;
             return value * Scale;
         }
 

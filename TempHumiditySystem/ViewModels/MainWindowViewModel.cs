@@ -2,6 +2,7 @@ using System;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Linq;
+using System.Windows;
 using System.Windows.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -146,11 +147,36 @@ namespace TempHumiditySystem.ViewModels
                 CurrentViewModel = item.PageViewModel;
         }
 
+        /// <summary>
+        /// 关闭窗口前的未保存检查；返回 false 表示用户取消关闭。
+        /// 页面 VM 常驻于 NavItems，切换页面不会丢失编辑内容，所以只在退出时拦截。
+        /// </summary>
+        public bool CanClose()
+        {
+            var configPage = NavItems.Select(n => n.PageViewModel).OfType<ConfigViewModel>().FirstOrDefault();
+            if (configPage is not { IsDirty: true }) return true;
+
+            var result = MessageBox.Show(
+                "参数配置页有未保存的修改，退出后这些修改将丢失。仍要退出吗？",
+                "未保存的修改",
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Warning);
+
+            return result == MessageBoxResult.Yes;
+        }
+
         public void Dispose()
         {
             _summaryTimer.Stop();
             _comm.PropertyChanged -= OnCommPropertyChanged;
             Alarm.ActiveAlarms.CollectionChanged -= OnActiveAlarmsChanged;
+
+            // 级联释放页面 VM：Monitor 的定时器、Comm/Trend/History 的事件订阅
+            foreach (var nav in NavItems)
+            {
+                if (nav.PageViewModel is IDisposable disposable)
+                    disposable.Dispose();
+            }
         }
     }
 }

@@ -10,6 +10,9 @@ namespace TempHumiditySystem.Services.Modbus
 {
     public sealed class AlarmEngine
     {
+        /// <summary>历史报警保留上限：长期运行时不至于无限增长。</summary>
+        public const int MaxHistoryAlarms = 500;
+
         private readonly Dictionary<SensorPoint, bool> _alarmState = new();
         public ObservableCollection<Alarm> ActiveAlarms { get; } = new();
         public ObservableCollection<Alarm> HistoryAlarms { get; } = new();
@@ -31,6 +34,8 @@ namespace TempHumiditySystem.Services.Modbus
                 {
                     ActiveAlarms.Remove(alarm);
                     HistoryAlarms.Add(alarm);
+                    while (HistoryAlarms.Count > MaxHistoryAlarms)
+                        HistoryAlarms.RemoveAt(0);
                     alarmCleared?.Invoke(alarm);
                 }
             } else if(!oldS && newS)

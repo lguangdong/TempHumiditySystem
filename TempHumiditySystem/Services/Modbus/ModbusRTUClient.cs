@@ -108,10 +108,6 @@ namespace TempHumiditySystem.Services.Modbus
                 if (!Crc16.Validate(frame)) throw new InvalidOperationException("响应的crc校验失败");
                 return frame;
             }
-            catch(Exception e)
-            {
-                throw;
-            }
             finally
             {
                 _questGate.Release();
