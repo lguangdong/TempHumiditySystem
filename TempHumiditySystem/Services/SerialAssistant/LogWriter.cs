@@ -50,6 +50,16 @@ namespace TempHumiditySystem.Services.SerialAssistant
             }
         }
 
+        /// <summary>立即把缓冲写入磁盘（崩溃兜底/退出前调用）。</summary>
+        public void Flush()
+        {
+            lock (_lock)
+            {
+                _writer?.Flush();
+                _pending = 0;
+            }
+        }
+
         public void Dispose()
         {
             Stop();

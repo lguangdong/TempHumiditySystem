@@ -183,7 +183,21 @@ namespace TempHumiditySystem.Services.Modbus
         public void BroadcastWriteSingleReg(ushort addr, ushort value)
         {
             byte[] request = ModbusFrame.BuildWriteSingleReg(0, addr, value);
-            _serialPortService.Send(request);
+
+            // 必须与普通事务共用同一把门：否则广播帧可能插进"请求-应答"之间，打乱整个收发流
+            _questGate.Wait();
+            try
+            {
+                if (!_serialPortService.IsOpen) throw new InvalidOperationException("串口未打开");
+                ClearRBuffer();
+                _serialPortService.Send(request);
+                // 广播没有回复，留出帧间隔，避免与下一帧粘连
+                Thread.Sleep(guardMs);
+            }
+            finally
+            {
+                _questGate.Release();
+            }
         }
     }
 }

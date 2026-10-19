@@ -3,7 +3,8 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:modbus="clr-namespace:TempHumiditySystem.Models.ModBus">
     <StackPanel Margin="16">
-        <TextBlock Text="设备控制" FontSize="18" FontWeight="Bold" Margin="0,0,0,16"/>
+        <TextBlock Text="设备控制" FontSize="18" FontWeight="Bold" Margin="0,0,0,8"/>
+        <TextBlock Text="{Binding StatusText}" Foreground="#666" Margin="0,0,0,8"/>
 
         <ItemsControl ItemsSource="{Binding Devices}">
             <ItemsControl.ItemTemplate>

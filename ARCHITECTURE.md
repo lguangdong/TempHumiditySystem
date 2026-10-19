@@ -72,7 +72,9 @@
 - 实现 `ISerialPortService`，封装 `System.IO.Ports.SerialPort`。
 - `Open()` 启动独立后台读线程 `ReadLoop`，持续 `Read` 并把数据通过 `DataReceived` 事件抛出。
 - `ReadTimeout = 200ms`（另设 `WriteTimeout = 2000ms`、`ReadBufferSize = 8192`），正常超时忽略，异常则触发 `ErrorOccurred` 并退出读线程。
-- `Open()` 失败时触发 `ErrorOccurred` 并抛出 `SerialPortFailureException`（避免上层误判为"已连接"）；`Send()` 写超时同样抛 `SerialPortFailureException`。
+- `Open()` 失败时触发 `ErrorOccurred` 并抛出 `SerialPortFailureException`（避免上层误判为"已连接"）；`Send()` 的写超时、端口拔出/被抢占等所有异常统一包装为 `SerialPortFailureException`（不再静默 `return 0`）。
+- **读线程生命周期**：读线程持有"本次连接"的 `SerialPort` 实例引用（不读字段），重连后新旧线程不会抢同一句柄；`Close()` 按"线程是否存活"决定是否 `Join`，超时才 `Dispose` 端口强制打断，确保线程必定回收；读线程异常退出时自动置 `IsOpen=false` 并释放端口，保证下次重连不会撞"端口被占用"。
+- **故障上报**：`PollingService` 订阅 `ErrorOccurred` 并转为 `connectionLost`（主动断开期间抑制），`App` 同时订阅写文件日志（`logs\yyyyMMdd.log`）；`App.OnExit` 负责 `Stop()` + `Dispose()` 释放串口。
 - 接口抽象 `ISerialPortService` 便于后续替换/测试。
 
 ### 4.2 ModbusRTUClient（Modbus 客户端）
@@ -83,7 +85,7 @@
   - 发送前清空接收缓冲 + 重置 `AutoResetEvent`，发送后按超时 `timeoutMs` 等待。
   - 先收满 5 字节头做校验（从站地址、功能码、异常码），再收完整帧。
   - 校验：从站地址匹配 → 功能码匹配 → CRC16 校验。
-- 支持读线圈/离散输入/保持寄存器/输入寄存器、写单/多线圈、写单/多寄存器，以及广播写（从站 0，无回复）。
+- 支持读线圈/离散输入/保持寄存器/输入寄存器、写单/多线圈、写单/多寄存器，以及广播写（从站 0，无回复）。广播写同样经过 `_questGate`，避免插进"请求-应答"之间打乱收发流。
 - `timeoutMs`（默认 500）/ `guardMs`（默认 20）可调。
 
 ### 4.3 ModbusFrame / Crc16 / ModbusTiming
@@ -141,11 +143,14 @@ sensorValueUpdated(SensorPoint)  ──► AlarmEngine / ControlEngine
   - 用 `TurnsOnBelow` 区分升温类（低于阈值开）和降温类（高于阈值开）。
   - 运行中判断是否到 `OffAt`，停止中判断是否到 `OnAt`，避免频繁抖动。
 - 写寄存器为阻塞 IO，控制页把命令丢到后台线程执行。
+- **写失败不外抛**：`ControlEngine` 内部捕获全部异常，保持 `IsRunning` 原值（下个周期重试），通过 `writeFailed` 事件上报（组合根接到日志），避免异常冒泡回轮询线程被误判成"读失败"并触发无谓重连。
+- `SetManual` 返回 `bool`，控制页据此提示成功/失败；`SetAuto` / `SetManualMode` 只改内存状态，不写寄存器。
 
 ## 7. 历史数据
 
 - **HistorySampler**：后台线程每 `5000ms` 采样一次，遍历 `config.Sensors` 的 `CurrentValue` 生成 `HistorySample`（`Time` + `Values[]`）。
 - **HistoryStore**：`Queue<HistorySample>` 环形缓冲，`MaxSamples = 17280`（24h × 每 5s），超量自动出队。新增时触发 `historySampleAdded`。
+  - **线程安全**：采样线程 `Add`、UI 线程 `GetAll()/Count`，所有集合访问用 `lock` 保护，`GetAll()` 返回数组快照；事件在锁外触发，避免订阅者回调造成死锁。
 - **趋势图（TrendViewModel）**：为每个测点建一条 `LineSeries<ObservablePoint>`，X 存 `DateTime.Ticks`，`Axis.Labeler` 校验 NaN/Infinity/Ticks 范围后转时间字符串（LiveCharts2 无数据时会传越界值，必须校验）。
 
 ## 8. 页面与 ViewModel 映射
