@@ -45,7 +45,7 @@ namespace TempHumiditySystem.ViewModels
         [ObservableProperty] private string _pollIntervalText = "轮询周期：1s";
         [ObservableProperty] private int _onlineSensorCount;
 
-        public string Version { get; } = "v0.1 骨架";
+        public string Version { get; } = "v1.2.0";
 
         private readonly CommViewModel _comm;
         private readonly DispatcherTimer _summaryTimer;
