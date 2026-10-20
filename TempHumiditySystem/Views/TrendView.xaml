@@ -20,16 +20,70 @@
         <!-- 图表卡片 -->
         <Border Grid.Row="1" Background="White" BorderBrush="#E5E7EB" BorderThickness="1"
                 CornerRadius="8" Padding="12">
-            <lvc:CartesianChart
-                Series="{Binding Series}"
-                XAxes="{Binding XAxes}"
-                YAxes="{Binding YAxes}"
-                DrawMarginFrame="{Binding DrawMarginFrame}"
-                LegendPosition="Bottom"
-                LegendTextSize="12"
-                TooltipPosition="Top"
-                ZoomMode="X"
-                AnimationsSpeed="0:0:0.2"/>
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+
+                <!-- 图例已由右侧曲线列表代替：测点多了以后底部图例会占掉几行绘图区。
+                     悬浮气泡：CompareOnlyXTakeClosest = 只比较横轴命中范围（整条竖线都算），且每条曲线只取离鼠标最近的点
+                     （不带 TakeClosest 时，1 秒一个点、点距不到 1 像素，一次命中会返回同一曲线的几十个点，气泡里出现一大堆重复行）；
+                     TooltipPosition=Auto = 按空间自动上下翻转，避免贴近边缘时气泡画到画布外看不见；
+                     AnimationsSpeed=0 = 每秒新数据不再触发 0.2s 动画（动画期间命中位置与画面错位，气泡会闪）。 -->
+                <lvc:CartesianChart Grid.Column="0" x:Name="Chart"
+                    Series="{Binding Series}"
+                    XAxes="{Binding XAxes}"
+                    YAxes="{Binding YAxes}"
+                    DrawMarginFrame="{Binding DrawMarginFrame}"
+                    LegendPosition="Hidden"
+                    TooltipPosition="Auto"
+                    FindingStrategy="CompareOnlyXTakeClosest"
+                    ZoomMode="PanX"
+                    AnimationsSpeed="0:0:0"/>
+
+                <!-- 右侧：曲线显示开关（勾选才绘制，隐藏的曲线仍在后台累积数据） -->
+                <Border Grid.Column="1" Width="196" Margin="12,0,0,0"
+                        Background="#F9FAFB" BorderBrush="#E5E7EB" BorderThickness="1"
+                        CornerRadius="6" Padding="10">
+                    <DockPanel>
+                        <StackPanel DockPanel.Dock="Top">
+                            <TextBlock Text="显示曲线" FontWeight="SemiBold" Foreground="#374151"/>
+                            <TextBlock Text="{Binding VisibleText}" FontSize="11" Foreground="#9CA3AF" Margin="0,2,0,0"/>
+
+                            <CheckBox Content="跟随最新数据" IsChecked="{Binding IsFollowing}" Margin="0,8,0,0"
+                                      ToolTip="勾选时横轴自动停在最新数据；在图上拖动会自动取消勾选，重新勾选即回到最新"/>
+                            <TextBlock Text="左右拖动可查看历史，重新勾选回到最新" FontSize="11"
+                                       Foreground="#9CA3AF" TextWrapping="Wrap" Margin="0,2,0,0"/>
+
+                            <StackPanel Orientation="Horizontal" Margin="0,8,0,8">
+                                <Button Content="全选" Command="{Binding ShowAllCommand}" Padding="8,2" FontSize="11"/>
+                                <Button Content="全不选" Command="{Binding HideAllCommand}" Padding="8,2" FontSize="11" Margin="6,0,0,0"/>
+                            </StackPanel>
+                            <Border Height="1" Background="#E5E7EB" Margin="0,0,0,6"/>
+                        </StackPanel>
+
+                        <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                            <ItemsControl ItemsSource="{Binding Curves}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <CheckBox IsChecked="{Binding IsVisible}" Margin="0,4" VerticalContentAlignment="Center"
+                                                  ToolTip="勾选后在图上绘制这条曲线">
+                                            <StackPanel Orientation="Horizontal">
+                                                <Border Width="10" Height="10" CornerRadius="2"
+                                                        Background="{Binding Brush}"
+                                                        VerticalAlignment="Center" Margin="0,0,6,0"/>
+                                                <TextBlock Text="{Binding Display}" FontSize="12" Foreground="#374151"
+                                                           TextTrimming="CharacterEllipsis"/>
+                                            </StackPanel>
+                                        </CheckBox>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </ScrollViewer>
+                    </DockPanel>
+                </Border>
+            </Grid>
         </Border>
     </Grid>
     </Grid>

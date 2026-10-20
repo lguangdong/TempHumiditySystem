@@ -23,11 +23,19 @@ namespace TempHumiditySystem.Models
             Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
             "TempHumiditySystem", "settings.json");
 
-        /// <summary>当前生效的设置实例（程序启动后首次访问时从磁盘加载）。</summary>
-        public static AppSettings Current { get; private set; } = LoadFromDisk();
+        private static AppSettings? _current;
+
+        /// <summary>
+        /// 当前生效的设置实例（程序启动后首次访问时从磁盘加载）。
+        /// 必须用「访问时延迟加载」而不是字段初始化器：静态字段按声明顺序初始化，
+        /// 若把 Current 声明在 <see cref="Options"/> 之前，加载时 Options 还是 null，
+        /// 枚举写成字符串（"CommParity":"None"）就会解析失败 → 整份设置被丢弃，
+        /// 表现为「上次保存的串口每次启动都变回默认值」。
+        /// </summary>
+        public static AppSettings Current => _current ??= LoadFromDisk();
 
         /// <summary>重新从磁盘加载设置（外部改过 settings.json 后刷新）。</summary>
-        public static void Reload() => Current = LoadFromDisk();
+        public static void Reload() => _current = LoadFromDisk();
 
         /// <summary>用户所选的 config.json 存放目录；为空表示沿用默认目录（%AppData%\TempHumiditySystem）。</summary>
         public string? ConfigDirectory { get; set; }

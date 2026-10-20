@@ -17,6 +17,19 @@
             <Setter Property="Margin" Value="0,4"/>
             <Setter Property="Height" Value="28"/>
             <Setter Property="VerticalContentAlignment" Value="Center"/>
+            <Style.Triggers>
+                <!-- 绑定层错误（数字框里输入了非数字等）：悬停显示绑定自身的第一条错误 -->
+                <Trigger Property="Validation.HasError" Value="True">
+                    <Setter Property="ToolTip"
+                            Value="{Binding Path=(Validation.Errors)[0].ErrorContent, RelativeSource={RelativeSource Self}}"/>
+                    <Setter Property="ToolTipService.ShowDuration" Value="60000"/>
+                </Trigger>
+                <!-- 模型层错误（DataAnnotations + 跨行校验）：悬停显示合并后的全部原因 -->
+                <DataTrigger Binding="{Binding HasError}" Value="True">
+                    <Setter Property="ToolTip" Value="{Binding ErrorText}"/>
+                    <Setter Property="ToolTipService.ShowDuration" Value="60000"/>
+                </DataTrigger>
+            </Style.Triggers>
         </Style>
 
         <Style x:Key="SectionTitle" TargetType="TextBlock">
@@ -125,7 +138,7 @@
                                         <DataTemplate>
                                             <TextBlock Text="⚠" Foreground="#E53935" HorizontalAlignment="Center"
                                                        Visibility="{Binding HasError, Converter={StaticResource BoolToVisibility}}"
-                                                       ToolTip="{Binding ExternalError}"/>
+                                                       ToolTip="{Binding ErrorText}"/>
                                         </DataTemplate>
                                     </DataGridTemplateColumn.CellTemplate>
                                 </DataGridTemplateColumn>
@@ -204,8 +217,12 @@
                                         </ComboBox>
                                         <TextBlock Grid.Row="1" Grid.Column="2" Text="单位"
                                                    Style="{StaticResource FieldLabel}" Margin="12,0,0,0"/>
-                                        <TextBox Grid.Row="1" Grid.Column="3" Style="{StaticResource FieldBox}"
-                                                 Text="{Binding Unit, UpdateSourceTrigger=PropertyChanged}"/>
+                                        <!-- 预设下拉：单位统一用下拉选择，避免手输造成「℃ / C / 度」混用；
+                                             选中项走 VM 的 UnitPicker 中转，不直接双向绑定模型字段 -->
+                                        <ComboBox Grid.Row="1" Grid.Column="3" Style="{StaticResource FieldBox}"
+                                                  IsEditable="False"
+                                                  ItemsSource="{Binding DataContext.Units, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                  SelectedItem="{Binding DataContext.UnitPicker, RelativeSource={RelativeSource AncestorType=UserControl}}"/>
 
                                         <!-- 从站 / 寄存器地址 -->
                                         <TextBlock Grid.Row="2" Grid.Column="0" Text="从站地址" Style="{StaticResource FieldLabel}"/>
@@ -230,26 +247,25 @@
                                         <TextBlock Grid.Row="3" Grid.Column="2" Text="系数"
                                                    Style="{StaticResource FieldLabel}" Margin="12,0,0,0"/>
                                         <TextBox Grid.Row="3" Grid.Column="3" Style="{StaticResource FieldBox}"
-                                                 Text="{Binding Scale, UpdateSourceTrigger=LostFocus, ValidatesOnNotifyDataErrors=True}"
-                                                 ToolTip="物理值 = 原始值 × 系数"/>
+                                                 Text="{Binding Scale, UpdateSourceTrigger=LostFocus, ValidatesOnNotifyDataErrors=True}"/>
 
                                         <!-- 上限 / 下限 -->
                                         <TextBlock Grid.Row="4" Grid.Column="0" Text="报警上限" Style="{StaticResource FieldLabel}"/>
                                         <TextBox Grid.Row="4" Grid.Column="1" Style="{StaticResource FieldBox}"
                                                  Text="{Binding HighLimit, Converter={StaticResource Limit}, ConverterParameter=High,
-                                                                UpdateSourceTrigger=LostFocus, ValidatesOnNotifyDataErrors=True}"
-                                                 ToolTip="留空表示不设上限"/>
+                                                                UpdateSourceTrigger=LostFocus, ValidatesOnNotifyDataErrors=True}"/>
                                         <TextBlock Grid.Row="4" Grid.Column="2" Text="报警下限"
                                                    Style="{StaticResource FieldLabel}" Margin="12,0,0,0"/>
                                         <TextBox Grid.Row="4" Grid.Column="3" Style="{StaticResource FieldBox}"
                                                  Text="{Binding LowLimit, Converter={StaticResource Limit}, ConverterParameter=Low,
-                                                                UpdateSourceTrigger=LostFocus, ValidatesOnNotifyDataErrors=True}"
-                                                 ToolTip="留空表示不设下限"/>
+                                                                UpdateSourceTrigger=LostFocus, ValidatesOnNotifyDataErrors=True}"/>
                                     </Grid>
 
-                                    <TextBlock Text="该测点的原始值按「数据类型」解释后乘以「系数」得到物理值；同一从站下寄存器地址不能重复。"
+                                    <TextBlock Text="该测点的原始值按「数据类型」解释后乘以「系数」得到物理值；报警上限/下限留空表示不设限；同一从站下寄存器地址不能重复。"
                                                Foreground="#999" TextWrapping="Wrap" Margin="0,14,0,0"/>
-                                    <TextBlock Text="⚠ 校验未通过的行会在左侧列表显示红色标记，鼠标悬停可查看原因。"
+                                    <TextBlock Text="单位从下拉预设中选择（温度常用 ℃ / °F / K，湿度常用 %RH / % / g/m³），已配置的自定义单位会自动保留在下拉列表中。"
+                                               Foreground="#999" TextWrapping="Wrap" Margin="0,4,0,0"/>
+                                    <TextBlock Text="⚠ 校验未通过的项会在左侧列表显示红色标记；鼠标悬停左侧标记或右侧输入框可查看具体原因。"
                                                Foreground="#999" TextWrapping="Wrap" Margin="0,4,0,0"/>
                                 </StackPanel>
                             </ScrollViewer>
@@ -298,7 +314,7 @@
                                         <DataTemplate>
                                             <TextBlock Text="⚠" Foreground="#E53935" HorizontalAlignment="Center"
                                                        Visibility="{Binding HasError, Converter={StaticResource BoolToVisibility}}"
-                                                       ToolTip="{Binding ExternalError}"/>
+                                                       ToolTip="{Binding ErrorText}"/>
                                         </DataTemplate>
                                     </DataGridTemplateColumn.CellTemplate>
                                 </DataGridTemplateColumn>
@@ -366,8 +382,7 @@
                                         <TextBlock Grid.Row="1" Grid.Column="2" Text="写地址"
                                                    Style="{StaticResource FieldLabel}" Margin="12,0,0,0"/>
                                         <TextBox Grid.Row="1" Grid.Column="3" Style="{StaticResource FieldBox}"
-                                                 Text="{Binding WriteAddress, UpdateSourceTrigger=LostFocus, ValidatesOnNotifyDataErrors=True}"
-                                                 ToolTip="功能码 06 写单个寄存器：0 = 停止，1 = 运行"/>
+                                                 Text="{Binding WriteAddress, UpdateSourceTrigger=LostFocus, ValidatesOnNotifyDataErrors=True}"/>
 
                                         <!-- 关联测点 -->
                                         <TextBlock Grid.Row="2" Grid.Column="0" Text="关联测点" Style="{StaticResource FieldLabel}"/>
@@ -403,6 +418,8 @@
                                     <TextBlock Text="开启值 / 关闭值构成迟滞区间，避免设备在阈值附近频繁启停。"
                                                Foreground="#999" TextWrapping="Wrap" Margin="0,14,0,0"/>
                                     <TextBlock Text="升温类需满足「开启值 &lt; 关闭值」，降温类相反；关联测点必须存在于测点列表中。"
+                                               Foreground="#999" TextWrapping="Wrap" Margin="0,4,0,0"/>
+                                    <TextBlock Text="写地址通过功能码 06 写单个寄存器：0 = 停止，1 = 运行；鼠标悬停左侧红色标记或右侧输入框可查看具体原因。"
                                                Foreground="#999" TextWrapping="Wrap" Margin="0,4,0,0"/>
                                 </StackPanel>
                             </ScrollViewer>

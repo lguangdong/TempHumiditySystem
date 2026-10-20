@@ -38,6 +38,15 @@ namespace TempHumiditySystem.ViewModels
         /// <summary>测点「分组」下拉数据源。</summary>
         public ObservableCollection<string> SensorGroups { get; } = new();
 
+        /// <summary>
+        /// 测点「单位」下拉数据源：预设单位 + 配置里已出现的自定义单位。
+        /// 只追加不清空——清空/重建会让绑定的 ComboBox 把 SelectedItem 的 null 回写进 <see cref="SensorEditModel.Unit"/>。
+        /// </summary>
+        public ObservableCollection<string> Units { get; } = new();
+
+        /// <summary>预设单位（温度 + 湿度两类测点常用的写法）。</summary>
+        private static readonly string[] PresetUnits = { "℃", "°F", "K", "%RH", "%", "g/m³" };
+
         [ObservableProperty] private SensorEditModel? _selectedSensor;
         [ObservableProperty] private DeviceEditModel? _selectedDevice;
 
@@ -50,6 +59,15 @@ namespace TempHumiditySystem.ViewModels
 
         /// <summary>关联测点快捷选择（同 <see cref="GroupPicker"/>，避免同一类回写问题）。</summary>
         [ObservableProperty] private string? _sensorPicker;
+
+        /// <summary>单位下拉的选中项：与 <see cref="SensorEditModel.Unit"/> 同步，但不直接双向绑定模型字段。</summary>
+        [ObservableProperty] private string? _unitPicker;
+
+        partial void OnUnitPickerChanged(string? value)
+        {
+            if (!string.IsNullOrWhiteSpace(value) && SelectedSensor != null)
+                SelectedSensor.Unit = value;
+        }
 
         partial void OnGroupPickerChanged(string? value)
         {
@@ -64,7 +82,15 @@ namespace TempHumiditySystem.ViewModels
         }
 
         // 切换选中记录时清空下拉的选中项，避免上一台设备/测点的选择残留
-        partial void OnSelectedSensorChanged(SensorEditModel? value) => GroupPicker = null;
+        partial void OnSelectedSensorChanged(SensorEditModel? value)
+        {
+            GroupPicker = null;
+
+            // 切行时把该测点当前的单位同步到下拉（先补齐下拉项，历史配置里的自定义单位才不会丢选中项）
+            EnsureUnits();
+            UnitPicker = value?.Unit;
+        }
+
         partial void OnSelectedDeviceChanged(DeviceEditModel? value) => SensorPicker = null;
         [ObservableProperty] private string _statusText = "";
         [ObservableProperty] private string _configPath = SystemConfig.ResolvePath();
@@ -84,6 +110,8 @@ namespace TempHumiditySystem.ViewModels
         {
             Sensors.CollectionChanged += OnSensorsChanged;
             Devices.CollectionChanged += OnDevicesChanged;
+
+            EnsureUnits();
 
             // 打开页面即加载：既保证"看得见配置"，也避免用户在空表上点"保存"把配置清空
             ReloadCore(showStatus: false);
@@ -105,6 +133,7 @@ namespace TempHumiditySystem.ViewModels
                 foreach (SensorEditModel item in e.NewItems) item.PropertyChanged += OnSensorPropertyChanged;
 
             RefreshSensorOptions();
+            EnsureUnits();
             MarkDirty();
         }
 
@@ -121,7 +150,7 @@ namespace TempHumiditySystem.ViewModels
         private void OnSensorPropertyChanged(object? sender, PropertyChangedEventArgs e)
         {
             // 校验结果本身不算用户修改，否则每次校验都会把页面标脏
-            if (e.PropertyName == nameof(EditModelBase.ExternalError)) return;
+            if (IsValidationProperty(e.PropertyName)) return;
 
             if (e.PropertyName is nameof(SensorEditModel.Name) or nameof(SensorEditModel.GroupName))
                 RefreshSensorOptions();
@@ -131,9 +160,15 @@ namespace TempHumiditySystem.ViewModels
 
         private void OnDevicePropertyChanged(object? sender, PropertyChangedEventArgs e)
         {
-            if (e.PropertyName == nameof(EditModelBase.ExternalError)) return;
+            if (IsValidationProperty(e.PropertyName)) return;
             MarkDirty();
         }
+
+        /// <summary>校验结果相关的属性（跨行错误、是否有错、错误合并文本）变化不算用户修改。</summary>
+        private static bool IsValidationProperty(string? propertyName)
+            => propertyName is nameof(EditModelBase.ExternalError)
+                or nameof(EditModelBase.HasError)
+                or nameof(EditModelBase.ErrorText);
 
         /// <summary>重建测点名 / 分组下拉数据源（去重、保持顺序）。</summary>
         private void RefreshSensorOptions()
@@ -157,6 +192,24 @@ namespace TempHumiditySystem.ViewModels
 
             target.Clear();
             foreach (var value in values) target.Add(value);
+        }
+
+        /// <summary>
+        /// 补齐单位下拉项：预设单位 + 配置中已使用的自定义单位（历史配置可能是手输的，不能丢）。
+        /// 只追加、从不移除，避免 ComboBox 因选中项消失而把 null 回写到 Unit。
+        /// </summary>
+        private void EnsureUnits()
+        {
+            foreach (var unit in PresetUnits) AddUnit(unit);
+            foreach (var sensor in Sensors) AddUnit(sensor.Unit?.Trim() ?? "");
+        }
+
+        private void AddUnit(string unit)
+        {
+            if (string.IsNullOrWhiteSpace(unit)) return;
+            if (Units.Any(u => string.Equals(u, unit, StringComparison.OrdinalIgnoreCase))) return;
+
+            Units.Add(unit);
         }
 
         // ================= 测点增删 =================
@@ -278,6 +331,7 @@ namespace TempHumiditySystem.ViewModels
             }
 
             RefreshSensorOptions();
+            EnsureUnits();
             ConfigPath = path;
             IsDirty = false;
             CanRestart = false;

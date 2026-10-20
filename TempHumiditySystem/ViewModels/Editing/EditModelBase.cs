@@ -1,4 +1,6 @@
-﻿using CommunityToolkit.Mvvm.ComponentModel;
+﻿using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
+using CommunityToolkit.Mvvm.ComponentModel;
 
 namespace TempHumiditySystem.ViewModels.Editing
 {
@@ -16,13 +18,43 @@ namespace TempHumiditySystem.ViewModels.Editing
         /// <summary>该行是否存在任何错误（字段级或跨行）。</summary>
         public bool HasError => HasErrors || !string.IsNullOrEmpty(ExternalError);
 
-        protected EditModelBase()
+        /// <summary>
+        /// 该行所有错误的合并文本（字段级 + 跨行），用于鼠标悬停提示。
+        /// 单字段校验结果来自 <see cref="ObservableValidator"/>，跨行结果来自 <see cref="ExternalError"/>。
+        /// </summary>
+        public string ErrorText
         {
-            // 字段级校验结果变化时，同步刷新列表行上的错误标记
-            ErrorsChanged += (_, _) => OnPropertyChanged(nameof(HasError));
+            get
+            {
+                var messages = new List<string>();
+                foreach (var result in GetErrors(null).OfType<ValidationResult>())
+                {
+                    var message = result.ErrorMessage;
+                    if (!string.IsNullOrWhiteSpace(message) && !messages.Contains(message)) messages.Add(message);
+                }
+
+                if (!string.IsNullOrWhiteSpace(ExternalError) && !messages.Contains(ExternalError!))
+                    messages.Add(ExternalError!);
+
+                return string.Join("；", messages);
+            }
         }
 
-        partial void OnExternalErrorChanged(string? value) => OnPropertyChanged(nameof(HasError));
+        protected EditModelBase()
+        {
+            // 字段级校验结果变化时，同步刷新列表行上的错误标记与悬停提示
+            ErrorsChanged += (_, _) =>
+            {
+                OnPropertyChanged(nameof(HasError));
+                OnPropertyChanged(nameof(ErrorText));
+            };
+        }
+
+        partial void OnExternalErrorChanged(string? value)
+        {
+            OnPropertyChanged(nameof(HasError));
+            OnPropertyChanged(nameof(ErrorText));
+        }
 
         /// <summary>执行全部字段级校验（基类的 ValidateAllProperties 是 protected，这里开放给页面 VM）。</summary>
         public void ValidateFields() => ValidateAllProperties();
