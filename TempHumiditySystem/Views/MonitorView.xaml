@@ -1,6 +1,10 @@
 <UserControl x:Class="TempHumiditySystem.Views.MonitorView"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <UserControl.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVisibility"/>
+    </UserControl.Resources>
+
     <Grid Margin="16">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>   <!-- 测点卡片 -->
@@ -69,6 +73,8 @@
                                 </StackPanel>
                             </Grid>
 
+                            <!-- 分组里没配温度测点时整块隐藏 -->
+                            <StackPanel Visibility="{Binding HasTemperature, Converter={StaticResource BoolToVisibility}}">
                             <TextBlock Text="温度" Foreground="Gray" Margin="0,10,0,0"/>
                             <StackPanel Orientation="Horizontal">
                                 <TextBlock FontSize="28" FontWeight="Bold">
@@ -92,7 +98,10 @@
                                 </TextBlock>
                                 <TextBlock Text="{Binding Temperature.Unit}" VerticalAlignment="Bottom" Margin="4,0,0,4"/>
                             </StackPanel>
+                            </StackPanel>
 
+                            <!-- 分组里没配湿度测点时整块隐藏 -->
+                            <StackPanel Visibility="{Binding HasHumidity, Converter={StaticResource BoolToVisibility}}">
                             <TextBlock Text="湿度" Foreground="Gray" Margin="0,10,0,0"/>
                             <StackPanel Orientation="Horizontal">
                                 <TextBlock FontSize="28" FontWeight="Bold">
@@ -114,6 +123,7 @@
                                     </TextBlock.Style>
                                 </TextBlock>
                                 <TextBlock Text="{Binding Humidity.Unit}" VerticalAlignment="Bottom" Margin="4,0,0,4"/>
+                            </StackPanel>
                             </StackPanel>
                         </StackPanel>
                     </Border>

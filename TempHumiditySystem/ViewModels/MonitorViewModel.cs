@@ -9,34 +9,46 @@ using TempHumiditySystem.Services.Modbus;
 
 namespace TempHumiditySystem.ViewModels
 {
-    /// <summary>一张传感器卡片：一个位置 = 温度测点 + 湿度测点。</summary>
+    /// <summary>一张传感器卡片：一个位置 = 温度测点 + 湿度测点（允许只有其中一个，缺的那一路不显示）。</summary>
     public sealed class SensorCardViewModel : ObservableObject
     {
         public string GroupName { get; }
-        public SensorPoint Temperature { get; }
-        public SensorPoint Humidity { get; }
+        public SensorPoint? Temperature { get; }
+        public SensorPoint? Humidity { get; }
+
+        /// <summary>该分组里是否配了温度 / 湿度测点（缺的一路整块隐藏，而不是让整张卡片消失）。</summary>
+        public bool HasTemperature => Temperature != null;
+        public bool HasHumidity => Humidity != null;
 
         /// <summary>温度测点是否在线（最近一次读取成功且数据未过期）。</summary>
-        public bool TemperatureOnline => IsFresh(Temperature);
+        public bool TemperatureOnline => Temperature is { } t && IsFresh(t);
 
         /// <summary>湿度测点是否在线（最近一次读取成功且数据未过期）。</summary>
-        public bool HumidityOnline => IsFresh(Humidity);
+        public bool HumidityOnline => Humidity is { } h && IsFresh(h);
 
-        /// <summary>温度、湿度都在线，才认为该从站已就绪、能接收数据。</summary>
-        public bool IsOnline => TemperatureOnline && HumidityOnline;
+        /// <summary>已配置的测点全部在线才算在线；只配了温度就只看温度。</summary>
+        public bool IsOnline
+        {
+            get
+            {
+                if (Temperature is { } t && !IsFresh(t)) return false;
+                if (Humidity is { } h && !IsFresh(h)) return false;
+                return HasTemperature || HasHumidity;
+            }
+        }
 
         /// <summary>供界面显示的在线文案。</summary>
         public string OnlineText => IsOnline ? "在线" : "离线";
 
-        public SensorCardViewModel(string groupName, SensorPoint temperature, SensorPoint humidity)
+        public SensorCardViewModel(string groupName, SensorPoint? temperature, SensorPoint? humidity)
         {
             GroupName = groupName;
             Temperature = temperature;
             Humidity = humidity;
 
             // 采集线程会改 IsOnline，任一变化即刷新卡片状态
-            Temperature.PropertyChanged += OnSensorPropertyChanged;
-            Humidity.PropertyChanged += OnSensorPropertyChanged;
+            if (Temperature != null) Temperature.PropertyChanged += OnSensorPropertyChanged;
+            if (Humidity != null) Humidity.PropertyChanged += OnSensorPropertyChanged;
         }
 
         // 复用 SensorPoint 上的新鲜度判定，保证与底部汇总栏"在线测点数"口径一致
@@ -78,13 +90,15 @@ namespace TempHumiditySystem.ViewModels
             Devices = config.Devices;
             ActiveAlarms = alarm.ActiveAlarms;
 
-            // 按 GroupName 分组：每个传感器一张卡（温度 + 湿度）
+            // 按 GroupName 分组：每个分组一张卡（温度 + 湿度，缺哪路就只显示另一路）。
+            // 以前要求"温度、湿度都必须有"才建卡，分组里两类测点配错时整张卡片会静默消失。
             foreach (var g in config.Sensors.GroupBy(s => s.GroupName))
             {
                 var temp = g.FirstOrDefault(s => s.Category == SensorCategory.Temperature);
                 var hum = g.FirstOrDefault(s => s.Category == SensorCategory.Humidity);
-                if (temp != null && hum != null)
-                    Cards.Add(new SensorCardViewModel(g.Key, temp, hum));
+                if (temp == null && hum == null) continue;
+
+                Cards.Add(new SensorCardViewModel(g.Key, temp, hum));
             }
 
             // 周期重算在线状态：串口断开 / 轮询线程退出时收不到任何事件，

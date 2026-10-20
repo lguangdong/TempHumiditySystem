@@ -218,17 +218,29 @@ namespace TempHumiditySystem.ViewModels
         private void AddSensor()
         {
             var last = Sensors.LastOrDefault();
+            string groupName = string.IsNullOrWhiteSpace(last?.GroupName) ? "新分组" : last!.GroupName;
+
+            // 同一分组里已经有温度、还没有湿度时，新测点默认按湿度创建：
+            // 监控页每张卡片固定是「1 个温度 + 1 个湿度」，整组都是温度的话湿度那一格永远没数据。
+            bool groupHasTemperature = Sensors.Any(s => s.Category == SensorCategory.Temperature
+                && string.Equals(s.GroupName.Trim(), groupName.Trim(), StringComparison.OrdinalIgnoreCase));
+            bool groupHasHumidity = Sensors.Any(s => s.Category == SensorCategory.Humidity
+                && string.Equals(s.GroupName.Trim(), groupName.Trim(), StringComparison.OrdinalIgnoreCase));
+            var category = groupHasTemperature && !groupHasHumidity
+                ? SensorCategory.Humidity
+                : SensorCategory.Temperature;
+
             var model = new SensorEditModel
             {
-                Name = NextName("新测点", Sensors.Select(s => s.Name)),
-                GroupName = string.IsNullOrWhiteSpace(last?.GroupName) ? "新分组" : last!.GroupName,
+                Name = NextName(category == SensorCategory.Humidity ? "新湿度" : "新温度", Sensors.Select(s => s.Name)),
+                GroupName = groupName,
                 SlaveId = last?.SlaveId ?? 1,
                 RegisterAddress = (ushort)Math.Min(65535, Sensors.Count == 0 ? 0 : Sensors.Max(s => (int)s.RegisterAddress) + 1),
-                Category = SensorCategory.Temperature,
-                Unit = "℃",
+                Category = category,
+                Unit = category == SensorCategory.Humidity ? "%RH" : "℃",
                 Scale = 0.1,
-                HighLimit = 35,
-                LowLimit = 0,
+                HighLimit = category == SensorCategory.Humidity ? 70 : 35,
+                LowLimit = category == SensorCategory.Humidity ? 50 : 0,
             };
 
             Sensors.Add(model);
@@ -386,6 +398,17 @@ namespace TempHumiditySystem.ViewModels
 
             foreach (var item in Sensors.Where(s => s.HighLimit <= s.LowLimit))
                 item.AppendExternalError("报警上限必须大于下限");
+
+            // 同一分组下同类测点重复：监控卡片只有「1 个温度 + 1 个湿度」两个位置，
+            // 多出来的同类测点不会显示（以前这种配置会让整张卡片直接从监控页消失）
+            foreach (var group in Sensors.GroupBy(s => s.GroupName.Trim())
+                                          .Where(g => g.Count(s => s.Category == SensorCategory.Temperature) > 1
+                                                   || g.Count(s => s.Category == SensorCategory.Humidity) > 1))
+            {
+                var groupName = string.IsNullOrWhiteSpace(group.Key) ? "未分组" : group.Key;
+                foreach (var item in group)
+                    item.AppendExternalError($"分组「{groupName}」有多个同类测点：监控卡片只显示 1 个温度 + 1 个湿度");
+            }
 
             // 3) 跨行校验：设备
             foreach (var group in Devices.GroupBy(d => d.Name.Trim(), StringComparer.OrdinalIgnoreCase).Where(g => g.Count() > 1))
