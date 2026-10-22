@@ -20,7 +20,31 @@ namespace TempHumiditySystem.Services.Modbus
         private readonly SemaphoreSlim _questGate = new(1, 1);
 
         public int timeoutMs { get; set; } = 500;
+
+        /// <summary>
+        /// 帧间隔(ms)：一次收发结束后等待总线静默的时间，用于排空滞留字节、隔开相邻帧。
+        /// 默认 20ms 只是兜底值，实际连接后由 <see cref="ConfigureTiming"/> 按波特率改写成规范值。
+        /// </summary>
         public int guardMs { get; set; } = 20;
+
+        /// <summary>
+        /// 帧间隔下限：USB 转串口芯片有 1~16ms 的批量上报延迟，
+        /// 高波特率下纯规范值（1.75ms）不足以把上一帧的残字节排空。
+        /// </summary>
+        private const int GuardFloorMs = 5;
+
+        /// <summary>
+        /// 按波特率设置帧间隔。Modbus RTU 要求帧间至少 3.5 个字符时间，
+        /// 波特率高于 19200 时规范固定取 1.75ms（见 <see cref="ModbusTiming.FrameGapMs"/>）。
+        /// 结果同时受 <see cref="GuardFloorMs"/> 约束，避免高速率下等待过短导致帧粘连。
+        /// </summary>
+        public void ConfigureTiming(int baudRate)
+        {
+            if (baudRate <= 0) return;
+
+            double specGapMs = ModbusTiming.FrameGapMs(baudRate);
+            guardMs = Math.Max(GuardFloorMs, (int)Math.Ceiling(specGapMs));
+        }
 
         public ModbusRTUClient(ISerialPortService serialPortService)
         {

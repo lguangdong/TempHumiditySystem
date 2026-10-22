@@ -100,6 +100,10 @@ namespace TempHumiditySystem.Services.Modbus
                 if (!portService.IsOpen)
                     throw new SerialPortFailureException($"串口 {setting.PortName} 未能打开");
 
+                // 帧间隔按实际波特率计算：9600 与 115200 相差 20 倍以上，
+                // 固定延时要不对低速口太短（帧粘连），要不对高速口太慢（白白拖长轮询周期）
+                client.ConfigureTiming(setting.BaudRate);
+
                 failCount = 0;   // 新连接从 0 开始计失败次数
 
                 var cts = new CancellationTokenSource();
