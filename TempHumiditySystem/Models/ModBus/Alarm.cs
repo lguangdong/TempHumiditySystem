@@ -46,7 +46,8 @@ namespace TempHumiditySystem.Models.ModBus
                 AlarmType.Communication => "通信故障",
                 _ => Type.ToString(),
             };
-            return $"{Time:HH:mm:ss} {Source} {type}（当前 {Value}，阈值 {Limit}）";
+            // 数值按需求保留到小数位（去掉 double 的浮点尾巴，如 28.900000000000002）
+            return $"{Time:HH:mm:ss} {Source} {type}（当前 {Value:0.##}，阈值 {Limit:0.##}）";
         }
     }
 }
